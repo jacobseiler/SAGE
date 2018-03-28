@@ -41,7 +41,9 @@ do {                                                                \
 #define  SEC_PER_MEGAYEAR   3.155e13
 #define  SEC_PER_YEAR       3.155e7
 
-/* This structure contains the properties that are output */
+#define  MAX_STRING_LEN     1024
+
+// This structure contains the properties that are output
 struct GALAXY_OUTPUT  
 {
   int   SnapNum;
@@ -204,13 +206,12 @@ extern int    GalaxyCounter;     /* unique galaxy ID for main progenitor line in
 
 extern int    LastSnapShotNr;
 
-extern char   OutputDir[512];
-extern char   FileNameGalaxies[512];
-extern char   TreeName[512];
-extern char   TreeType[512];
-extern char   TreeExtension[512]; /* If the trees are in HDF5, they will have a .hdf5 extension. */
-extern char   SimulationDir[512];
-extern char   FileWithSnapList[512];
+extern char   OutputDir[MAX_STRING_LEN];
+extern char   FileNameGalaxies[MAX_STRING_LEN];
+extern char   TreeName[MAX_STRING_LEN];
+extern char   TreeExtension[MAX_STRING_LEN]; // If the trees are in HDF5, they will have a .hdf5 extension. Otherwise they have no extension.
+extern char   SimulationDir[MAX_STRING_LEN];
+extern char   FileWithSnapList[MAX_STRING_LEN];
 
 extern int    TotHalos;
 extern int    TotGalaxies[ABSOLUTEMAXSNAPS];
@@ -305,5 +306,13 @@ extern int            HDF5_n_props;
 #define DOUBLE 1
 #define STRING 2
 #define INT 3
+
+enum Valid_TreeTypes
+{
+  genesis_lhalo_hdf5 = 0,
+  lhalo_binary = 1
+};
+enum Valid_TreeTypes TreeType;
+
 
 #endif  /* #ifndef ALLVARS_H */

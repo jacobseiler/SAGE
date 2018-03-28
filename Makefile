@@ -16,13 +16,18 @@ OBJS   = 	./code/main.o \
 			./code/model_disk_instability.o \
 			./code/model_reincorporation.o \
 			./code/model_mergers.o \
-			./code/model_misc.o
+			./code/model_misc.o \
+			./code/io/tree_binary.o \
+			./code/io/tree_hdf5.o
 
 INCL   =	./code/core_allvars.h  \
-		./code/core_proto.h  \
-		./code/core_simulation.h  \
-		./code/io/io_save_hdf5.h \
-		./Makefile
+			./code/core_proto.h  \
+			./code/core_simulation.h  \
+			./code/io/tree_binary.h \
+			./code/io/tree_hdf5.h \
+      ./code/io/io_save_hdf5.h \
+			./Makefile
+
 
 # USE-MPI = yes  # set this if you want to run in embarrassingly parallel
 USE-HDF5 = yes
@@ -39,7 +44,7 @@ else
 endif
 
 ifdef USE-HDF5
-    HDF5DIR := /apps/skylake/software/mpi/gcc/7.3.0/openmpi/3.0.0/hdf5/1.10.1/
+    HDF5DIR := usr/local/x86_64/gnu/hdf5-1.8.17-openmpi-1.10.2-psm
     HDF5INCL := -I$(HDF5DIR)/include
     HDF5LIB := -L$(HDF5DIR)/lib -lhdf5 -Xlinker -rpath -Xlinker $(HDF5DIR)/lib
 
@@ -71,8 +76,8 @@ endif
 OPTIMIZE = -g -O0 -Wall # optimization and warning flags
 
 LIBS   +=   -g -lm  $(GSL_LIBS) 
+CFLAGS +=   -Werror $(OPTIONS) $(OPT) $(OPTIMIZE) $(GSL_INCL)
 
-CFLAGS +=   $(OPTIONS) $(OPT) $(OPTIMIZE) $(GSL_INCL)
 
 default: all
 
@@ -86,7 +91,5 @@ clean:
 
 tidy:
 	rm -f $(OBJS) ./$(EXEC)
-ctags:
-	cd code; ctags *.[ch] -R --c++-kinds=+p --fields=+iaS --extra=+q; cd ..
 
 all:  tidy $(EXEC) clean

@@ -10,12 +10,12 @@
 void read_parameter_file(char *fname)
 {
   FILE *fd;
-  char buf[MAX_STRING_NAME_LEN], buf1[MAX_STRING_NAME_LEN];
-  char buf2[MAX_STRING_NAME_LEN], buf3[MAX_STRING_NAME_LEN];
-  int i, j, nt = 0, done;
+  char buf[MAX_STRING_LEN], buf1[MAX_STRING_LEN];
+  char buf2[MAX_STRING_LEN], buf3[MAX_STRING_LEN];
+  int i, j, done;
   int errorFlag = 0;
   int *used_tag = 0;
-
+  char my_treetype[MAX_STRING_LEN];
   NParam = 0;
 
 #ifdef MPI
@@ -23,6 +23,9 @@ void read_parameter_file(char *fname)
 #endif
     printf("\nreading parameter file:\n\n");
 
+  strcpy(ParamTag[NParam], "FileNameGalaxies");
+  ParamAddr[NParam] = FileNameGalaxies;
+  ParamID[NParam++] = STRING;
 
   strcpy(ParamTag[NParam], "OutputDir");
   ParamAddr[NParam] = OutputDir;
@@ -32,8 +35,8 @@ void read_parameter_file(char *fname)
   ParamAddr[NParam] = &HDF5Output;
   ParamID[NParam++] = INT;
 
-  strcpy(ParamTag[NParam], "FileNameGalaxies");
-  ParamAddr[NParam] = FileNameGalaxies;
+  strcpy(ParamTag[nt], "TreeType");
+  ParamAddr[nt] = my_treetype;
   ParamID[NParam++] = STRING;
 
   strcpy(ParamTag[NParam], "TreeName");
@@ -180,10 +183,6 @@ void read_parameter_file(char *fname)
   ParamAddr[NParam] = &NOUT;
   ParamID[NParam++] = INT;
 
-  strcpy(ParamTag[nt], "TreeType");
-  ParamAddr[NParam] = TreeType;
-  ParamID[NParam++] = STRING;
-
   used_tag = mymalloc(sizeof(int) * NParam);
   for(i=0; i<NParam; i++)
     used_tag[i]=1;
@@ -314,12 +313,8 @@ void read_parameter_file(char *fname)
     }
   
   // Check file type is valid. 
-  if (strncmp(TreeType, "binary", 511) == 0) // strncmp returns 0 if the two strings are equal. 
+  if (strncmp(my_treetype, "binary", 511) != 0) // strncmp returns 0 if the two strings are equal. Only available options are HDF5 or binary files. 
   {
-    TreeExtension[0] = '\0';
-  }
-  else
-  {  
     snprintf(TreeExtension, 511, ".hdf5");
 #ifndef HDF5
     fprintf(stderr, "You have specified to use a HDF5 file but have no compiled with the HDF5 option enabled.\n");
@@ -328,6 +323,18 @@ void read_parameter_file(char *fname)
 #endif
   }
 
+  // Recast the local treetype string to a global TreeType enum.
+
+  if (strcasecmp(my_treetype, "genesis_lhalo_hdf5") == 0)
+  {
+    TreeType = genesis_lhalo_hdf5;
+  }
+  else if (strcasecmp(my_treetype, "lhalo_binary") == 0)
+  {
+    TreeType = lhalo_binary;
+  }
+
   myfree(used_tag);
   
 }
+
