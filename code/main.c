@@ -13,7 +13,7 @@
 
 #include "core_allvars.h"
 #include "core_proto.h"
-
+#include "io/io_save_hdf5.h"
 
 char bufz0[1000];
 int exitfail = 1;
@@ -175,9 +175,11 @@ int main(int argc, char **argv)
   if(HDF5Output){
     free_hdf5_ids();
 
+#ifdef MPI
     // Create a single master HDF5 file with links to the other files...
     MPI_Barrier(MPI_COMM_WORLD);
     if (ThisTask == 0)
+#endif
       write_master_file();
   
   }

@@ -207,7 +207,7 @@ extern int    LastSnapShotNr;
 extern char   OutputDir[512];
 extern char   FileNameGalaxies[512];
 extern char   TreeName[512];
-extern char   FileType[512];
+extern char   TreeType[512];
 extern char   TreeExtension[512]; /* If the trees are in HDF5, they will have a .hdf5 extension. */
 extern char   SimulationDir[512];
 extern char   FileWithSnapList[512];
@@ -305,6 +305,5 @@ extern int            HDF5_n_props;
 #define DOUBLE 1
 #define STRING 2
 #define INT 3
-#define 
 
 #endif  /* #ifndef ALLVARS_H */

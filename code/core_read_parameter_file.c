@@ -13,13 +13,10 @@ void read_parameter_file(char *fname)
   char buf[MAX_STRING_NAME_LEN], buf1[MAX_STRING_NAME_LEN];
   char buf2[MAX_STRING_NAME_LEN], buf3[MAX_STRING_NAME_LEN];
   int i, j, nt = 0, done;
-  int id[MAXTAGS];
-  void *addr[MAXTAGS];
-  char tag[MAXTAGS][50];
   int errorFlag = 0;
   int *used_tag = 0;
 
-  Nparam = 0;
+  NParam = 0;
 
 #ifdef MPI
   if(ThisTask == 0)
@@ -179,12 +176,12 @@ void read_parameter_file(char *fname)
   ParamAddr[NParam] = &ThresholdSatDisruption;
   ParamID[NParam++] = DOUBLE;
 
-  strcpy(ParamTag[Nparam], "NumOutputs");
+  strcpy(ParamTag[NParam], "NumOutputs");
   ParamAddr[NParam] = &NOUT;
   ParamID[NParam++] = INT;
 
   strcpy(ParamTag[nt], "TreeType");
-  ParamAddr[Nparam] = TreeType;
+  ParamAddr[NParam] = TreeType;
   ParamID[NParam++] = STRING;
 
   used_tag = mymalloc(sizeof(int) * NParam);
@@ -261,7 +258,7 @@ void read_parameter_file(char *fname)
 	}
     }
   
-  if(errorflag) {
+  if(errorFlag) {
     ABORT(1);
   }
   printf("\n");
@@ -317,9 +314,9 @@ void read_parameter_file(char *fname)
     }
   
   // Check file type is valid. 
-  if (strncmp(FileType, "binary", 511) == 0) // strncmp returns 0 if the two strings are equal. 
+  if (strncmp(TreeType, "binary", 511) == 0) // strncmp returns 0 if the two strings are equal. 
   {
-    snprintf(TreeExtension, 511, ""); 
+    TreeExtension[0] = '\0';
   }
   else
   {  

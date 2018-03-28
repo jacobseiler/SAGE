@@ -5,8 +5,8 @@
 #include <time.h>
 #include <hdf5.h>
 
-#inclyde "core_save_hdf5.h"
-#include "core_proto.h"
+#include "io_save_hdf5.h"
+#include "../core_proto.h"
 
 #define TRUE  1
 #define FALSE 0

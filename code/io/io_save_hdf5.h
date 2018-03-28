@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core_allvars.h"
+#include "../core_allvars.h"
 
 extern void calc_hdf5_props(void);
 extern void write_hdf5_galaxy(struct GALAXY_OUTPUT *galaxy, int n, int filenr);

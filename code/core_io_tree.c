@@ -23,7 +23,7 @@ FILE* load_fd = NULL;
 
 void load_tree_table(int filenr)
 {
-  if (strncmp(FileType, "binary", 512) == 0)
+  if (strncmp(TreeType, "binary", 512) == 0)
   {
     load_tree_table_binary(filenr);
   }
