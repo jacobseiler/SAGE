@@ -7,6 +7,7 @@
 
 #ifdef HDF5
 #include <hdf5.h>
+#define MODELNAME        "SAGE"
 #endif
 
 #define ABORT(sigterm)                                                  \
@@ -15,11 +16,13 @@ do {                                                                \
   myexit(sigterm);                                                \
 } while(0)
 
-#define  STEPS 10         // Number of integration intervals between two snapshots 
+#define  STEPS 10         /* Number of integration intervals between two snapshots */
 #define  MAXGALFAC 1
 #define  ALLOCPARAMETER 10.0
 #define  MAX_NODE_NAME_LEN 50
-#define  ABSOLUTEMAXSNAPS 1000
+#define  ABSOLUTEMAXSNAPS 1000  /* The largest number of snapshots for any simulation */
+#define  MAX_STRING_NAME_LEN  1024 /* Max length of a string containing a name*/
+#define  MAXTAGS          300  /* Max number of parameters */
 
 
 #define  GRAVITY     6.672e-8
@@ -38,7 +41,7 @@ do {                                                                \
 #define  SEC_PER_MEGAYEAR   3.155e13
 #define  SEC_PER_YEAR       3.155e7
 
-// This structure contains the properties that are output
+/* This structure contains the properties that are output */
 struct GALAXY_OUTPUT  
 {
   int   SnapNum;
@@ -50,12 +53,12 @@ struct GALAXY_OUTPUT
   int   SAGETreeIndex;
   long long   SimulationHaloIndex;
   
-  int   mergeType;  //0=none; 1=minor merger; 2=major merger; 3=disk instability; 4=disrupt to ICS
+  int   mergeType;  /* 0=none; 1=minor merger; 2=major merger; 3=disk instability; 4=disrupt to ICS */
   int   mergeIntoID;
   int   mergeIntoSnapNum;
   float dT;
 
-  // (sub)halo properties
+  /* (sub)halo properties */
   float Pos[3];
   float Vel[3];
   float Spin[3];
@@ -67,7 +70,7 @@ struct GALAXY_OUTPUT
   float Vmax;
   float VelDisp;
 
-  // baryonic reservoirs 
+  /* baryonic reservoirs */
   float ColdGas;
   float StellarMass;
   float BulgeMass;
@@ -76,7 +79,7 @@ struct GALAXY_OUTPUT
   float BlackHoleMass;
   float ICS;
 
-  // metals
+  /* metals */
   float MetalsColdGas;
   float MetalsStellarMass;
   float MetalsBulgeMass;
@@ -84,13 +87,13 @@ struct GALAXY_OUTPUT
   float MetalsEjectedMass;
   float MetalsICS;
 
-  // to calculate magnitudes
+  /* to calculate magnitudes */
   float SfrDisk;
   float SfrBulge;
   float SfrDiskZ;
   float SfrBulgeZ;
   
-  // misc 
+  /* misc */
   float DiskScaleRadius;
   float Cooling;
   float Heating;
@@ -99,14 +102,14 @@ struct GALAXY_OUTPUT
   float TimeOfLastMinorMerger;
   float OutflowRate;
 
-  // infall properties
+  /* infall properties */
   float infallMvir;
   float infallVvir;
   float infallVmax;
 };
 
 
-// This structure contains the properties used within the code
+/* This structure contains the properties used within the code */
 struct GALAXY
 {
   int   SnapNum;
@@ -117,12 +120,12 @@ struct GALAXY
   int   HaloNr;
   long long MostBoundID;
 
-  int   mergeType;  //0=none; 1=minor merger; 2=major merger; 3=disk instability; 4=disrupt to ICS
+  int   mergeType;  /* 0=none; 1=minor merger; 2=major merger; 3=disk instability; 4=disrupt to ICS */
   int   mergeIntoID;
   int   mergeIntoSnapNum;
   float dT;
 
-  // (sub)halo properties
+  /* (sub)halo properties */
   float Pos[3];
   float Vel[3];
   int   Len;   
@@ -133,7 +136,7 @@ struct GALAXY
   float Vvir;
   float Vmax;
 
-  // baryonic reservoirs 
+  /* baryonic reservoirs */
   float ColdGas;
   float StellarMass;
   float BulgeMass;
@@ -142,7 +145,7 @@ struct GALAXY
   float BlackHoleMass;
   float ICS;
 
-  // metals
+  /* metals */
   float MetalsColdGas;
   float MetalsStellarMass;
   float MetalsBulgeMass;
@@ -150,7 +153,7 @@ struct GALAXY
   float MetalsEjectedMass;
   float MetalsICS;
 
-  // to calculate magnitudes
+  /* to calculate magnitudes */
   float SfrDisk[STEPS];
   float SfrBulge[STEPS];
   float SfrDiskColdGas[STEPS];
@@ -158,7 +161,7 @@ struct GALAXY
   float SfrBulgeColdGas[STEPS];
   float SfrBulgeColdGasMetals[STEPS];
 
-  // misc 
+  /* misc */
   float DiskScaleRadius;
   float MergTime;
   double Cooling;
@@ -170,7 +173,7 @@ struct GALAXY
   float OutflowRate;
   float TotalSatelliteBaryons;
 
-  // infall properties
+  /* infall properties */
   float infallMvir;
   float infallVvir;
   float infallVmax;
@@ -178,7 +181,7 @@ struct GALAXY
 *Gal, *HaloGal;
 
 
-// auxiliary halo data
+/* auxiliary halo data */
 struct halo_aux_data   
 {
   int DoneFlag;
@@ -188,16 +191,16 @@ struct halo_aux_data
 }
 *HaloAux;
 
-
-extern int    FirstFile;    // first and last file for processing 
+extern int    HDF5Output; 
+extern int    FirstFile;    /* first and last file for processing */
 extern int    LastFile;
 
-extern int    Ntrees;      // number of trees in current file 
-extern int    NumGals;     // Total number of galaxies stored for current tree 
-extern int    MaxGals;     // Maximum number of galaxies allowed for current tree  
+extern int    Ntrees;      /* number of trees in current file  */
+extern int    NumGals;     /* Total number of galaxies stored for current tree */
+extern int    MaxGals;     /* Maximum number of galaxies allowed for current tree */  
 extern int    FoF_MaxGals;
 
-extern int    GalaxyCounter;     // unique galaxy ID for main progenitor line in tree
+extern int    GalaxyCounter;     /* unique galaxy ID for main progenitor line in tree */
 
 extern int    LastSnapShotNr;
 
@@ -205,7 +208,7 @@ extern char   OutputDir[512];
 extern char   FileNameGalaxies[512];
 extern char   TreeName[512];
 extern char   FileType[512];
-extern char   TreeExtension[512]; // If the trees are in HDF5, they will have a .hdf5 extension.
+extern char   TreeExtension[512]; /* If the trees are in HDF5, they will have a .hdf5 extension. */
 extern char   SimulationDir[512];
 extern char   FileWithSnapList[512];
 
@@ -230,14 +233,19 @@ extern double Hubble_h;
 extern double EnergySNcode, EnergySN;
 extern double EtaSNcode, EtaSN;
 
-// recipe flags 
+/* recipe flags */
 extern int    ReionizationOn;
 extern int    SupernovaRecipeOn;
 extern int    DiskInstabilityOn;
 extern int    AGNrecipeOn;
 extern int    SFprescription;
 
-// recipe parameters 
+/* recipe parameters */
+extern int    NParam;
+extern char   ParamTag[MAXTAGS][50];
+extern int    ParamID[MAXTAGS];
+extern void   *ParamAddr[MAXTAGS];
+
 extern double RecycleFraction;
 extern double Yield;
 extern double FracZleaveDisk;
@@ -283,5 +291,20 @@ extern gsl_rng *random_generator;
 extern int TreeID;
 extern int FileNum;
 
+#ifdef HDF5
+extern char          *core_output_file;
+extern size_t         HDF5_dst_size;
+extern size_t        *HDF5_dst_offsets;
+extern size_t        *HDF5_dst_sizes;
+extern const char   **HDF5_field_names;
+extern hid_t         *HDF5_field_types;
+extern int            HDF5_n_props;
+#endif
 
-#endif  // #ifndef ALLVARS_H
+
+#define DOUBLE 1
+#define STRING 2
+#define INT 3
+#define 
+
+#endif  /* #ifndef ALLVARS_H */

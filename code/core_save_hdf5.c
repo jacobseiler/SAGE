@@ -4,20 +4,14 @@
 #include <math.h>
 #include <time.h>
 #include <hdf5.h>
-#include <hdf5_hl.h>
 
-#include "core_allvars.h"
+#inclyde "core_save_hdf5.h"
 #include "core_proto.h"
 
 #define TRUE  1
 #define FALSE 0
 
-#define DOUBLE 1
-#define STRING 2
-#define INT 3
-#define MAXTAGS 300
-
-void calc_hdf5_props()
+void calc_hdf5_props(void)
 {
 
   /*
@@ -483,7 +477,7 @@ static void store_run_properties(hid_t master_file_id)
   status = H5Gclose(props_group_id);
 }
 
-void one_file_to_rule_them_all(void)
+void write_master_file(void)
 {
 
   /*

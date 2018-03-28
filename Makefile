@@ -7,6 +7,7 @@ OBJS   = 	./code/main.o \
 			./code/core_cool_func.o \
 			./code/core_build_model.o \
 			./code/core_save.o \
+			./code/core_save_hdf5.o \
 			./code/core_mymalloc.o \
 			./code/core_allvars.o \
 			./code/model_infall.o \
@@ -18,9 +19,10 @@ OBJS   = 	./code/main.o \
 			./code/model_misc.o
 
 INCL   =	./code/core_allvars.h  \
-			./code/core_proto.h  \
-			./code/core_simulation.h  \
-			./Makefile
+		./code/core_proto.h  \
+		./code/core_simulation.h  \
+		./code/core_save_hdf5.h \
+		./Makefile
 
 # USE-MPI = yes  # set this if you want to run in embarrassingly parallel
 USE-HDF5 = yes
@@ -44,6 +46,8 @@ ifdef USE-HDF5
     LIBS += $(HDF5LIB) -lhdf5
     CFLAGS += $(HDF5INCL) 
 endif
+
+GITREF = -DGITREF_STR='"$(shell git show-ref --head | head -n 1 | cut -d " " -f 1)"'
 
 # GSL automatic detection
 GSL_FOUND := $(shell gsl-config --version 2>/dev/null)
@@ -81,5 +85,7 @@ clean:
 
 tidy:
 	rm -f $(OBJS) ./$(EXEC)
+ctags:
+	cd code; ctags *.[ch] -R --c++-kinds=+p --fields=+iaS --extra=+q; cd ..
 
 all:  tidy $(EXEC) clean

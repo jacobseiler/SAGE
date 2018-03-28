@@ -67,15 +67,17 @@ void load_tree_table_binary(int filenr)
   {
     for(i = 0; i < Ntrees; i++)
       TreeNgals[n][i] = 0;
+    
+    if(HDF5Output!=1){
+      sprintf(buf, "%s/%s_z%1.3f_%d", OutputDir, FileNameGalaxies, ZZ[ListOutputSnaps[n]], filenr);
 
-    sprintf(buf, "%s/%s_z%1.3f_%d", OutputDir, FileNameGalaxies, ZZ[ListOutputSnaps[n]], filenr);
-
-    if(!(fd = fopen(buf, "w")))
-    {
-      printf("can't open file `%s'\n", buf);
-      ABORT(0);
+      if(!(fd = fopen(buf, "w")))
+	{
+	  printf("can't open file `%s'\n", buf);
+	  ABORT(0);
+	}
+      fclose(fd);
     }
-    fclose(fd);
     TotGalaxies[n] = 0;
   }
 }
@@ -189,11 +191,11 @@ void free_tree_table(void)
   myfree(TreeFirstHalo);
   myfree(TreeNHalos);
 	
-	// Don't forget to free the open file handle
-	if(load_fd) {
-		fclose(load_fd);
-		load_fd = NULL;
-	}
+  // Don't forget to free the open file handle
+  if(load_fd) {
+    fclose(load_fd);
+    load_fd = NULL;
+  }
 }
 
 
