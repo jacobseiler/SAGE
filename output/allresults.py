@@ -38,17 +38,72 @@ OutputList = []
 
 
 class Model:
+    """
+    Handles all the galaxy data (including calculated properties).
 
-    def __init__(self, file_path, first_file, last_file, simulation, IMF):
+    The first 8 attributes (from ``model_path`` to ``line_style``) are
+    passed in a single dictionary (``model_dict``) to the class ``__init__``
+    method.
 
-        self.file_path = file_path
-        self.simulation = simulation 
-        self.IMF = IMF 
+    Attributes
+    ----------
 
-        self.set_cosmology(simulation)
-        self.gals = self.read_gals(file_path, first_file, last_file)
+    model_path : string 
+        File path to the galaxy files.
 
-        self.calc_properties() 
+        ..note:: Does not include the file number.
+
+    output_path : string
+        Directory path to where the plots will be saved.
+
+    first_file, last_file : int
+        Range (inclusive) of files that are read.
+
+    simulation : {0, 1, 2}
+        Specifies which simulation this model corresponds to.
+        0: Mini-millennium,
+        1: Millennium,
+        2: Kali (512^3 particles).
+
+    IMF : {0, 1} 
+        Specifies which IMF to used for this model.
+        0: Salpeter,
+        1: Chabrier.
+
+    tag : string
+        Tag placed on the legend for this model.
+
+    line_color : string
+        Line color used for this model.
+
+    line_style : string
+        Line style used for this model
+
+    Hubble_h : float
+        Hubble 'little h' value. Between 0 and 1.
+
+    BoxSize : float
+        Size of the simulation box for this model. Mpc/h.
+
+    MaxTreeFiles : int
+        Number of files generated from SAGE for this model.
+
+    gals : Galaxy numpy structured array
+        Galaxies read for this model.
+
+    mass : List of floats, length is number of galaxies
+        Mass of each galaxy. 1.0e10 Msun.
+
+    sSFR : List of floats, length is number of galaxies
+        Specific star formation rate of each galaxy
+    """
+
+    def __init__(self, model_dict):
+
+        # Set the attributes we were passed.
+        for key in model_dict:
+            setattr(self, key, model_dict[key])
+
 
     def set_cosmology(self, simulation):
 
@@ -223,42 +278,110 @@ class Model:
         G = self.gals
 
         w = np.where(G.StellarMass > 0.0)[0]
-        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.Hubble_h)
+        stellar_mass = np.log10(G.StellarMass[w] * 1.0e10 / self.Hubble_h)
         sSFR = (G.SfrDisk[w] + G.SfrBulge[w]) / (G.StellarMass[w] * 1.0e10 / self.Hubble_h)
 
-        self.gal_mass = mass
+        self.stellar_mass = stellar_mass 
         self.sSFR = sSFR
 
         return 
 
 
 class Results:
+    """
+    Handles all of the plotting of the models.
 
-    """ The following methods of this class generate the figures and plot them.
+    Attributes
+    ----------
+
+    models : List of ``Model`` class instances
+        Models that we will be plotting.
+
+    plot_toggles : Dictionary
+        Specifies which plots will be generated. An entry of `1` denotes
+        plotting, otherwise it will be skipped.
     """
 
-    def __init__(self, model_paths, model_first_file, model_last_file,
-                 model_simulation, model_IMF, model_tags):
+    def __init__(self, all_models_dict, plot_toggles):
+        """
+        Initialises the individual Model class instances and adds them to the
+        ``Results`` class instance.
 
-        # We will pass a list of model fnames/file numbers/etc that correspond
-        # to each model that we want to plot. We will initialise each of these
-        # and create a list of models which will be an attribute of the Results
-        # class.
+        Parameters 
+        ----------
+
+        all_models_dict : Dictionary 
+            Dictionary containing the parameter values for each Model instance.
+            Refer to the ``Model`` class for full details on this dictionary.
+
+        plot_toggles : Dictionary
+            Specifies which plots will be generated. An entry of `1` denotes
+            plotting, otherwise it will be skipped.             
+        """
+
+        # We will create a list that holds the Model class for each model.
         all_models = []
 
-        for (path, first_file, last_file, simulation, IMF) in \
-                zip(model_paths, model_first_file, model_last_file,
-                    model_simulation, model_IMF):
+        # Now let's go through each model, build an individual dictionary for
+        # that model and then create a Model instance using it.
+        for model_num in range(len(all_models_dict["model_path"])):
 
-            model = Model(path, first_file, last_file, simulation, IMF) 
+            model_dict = {}
+            for field in all_models_dict.keys():
 
+                model_dict[field] = all_models_dict[field][model_num]
+
+            model = Model(model_dict)
+
+            # Cosmology depends upon the simulation specified.
+            model.set_cosmology(model_dict["simulation"])
+
+            # Read in the galaxies from the provided path.
+            model.gals = model.read_gals(model_dict["model_path"],
+                                         model_dict["first_file"],
+                                         model_dict["last_file"])
+
+            # Then calculate mass/SFR/etc of these galaxies.
+            model.calc_properties() 
+
+            # Append to the global list.
             all_models.append(model)
 
         self.models = all_models
 
-        self.model_tags = model_tags
+        self.plot_toggles = plot_toggles
 
-        return
+
+    def do_plots(self):
+        """
+        Wrapper method to perform all the plotting for the models.
+
+        Parameters
+        ----------
+
+        None
+        """
+
+        plot_toggles = self.plot_toggles
+
+        # Depending upon the toggles, make the plots.
+        if plot_toggles["SMF"] == 1:
+            print("Plotting the Stellar Mass Function.")
+            self.StellarMassFunction()
+        #res.BaryonicMassFunction(model.gals)
+        #res.GasMassFunction(model.gals)
+        #res.BaryonicTullyFisher(model.gals)
+        #res.SpecificStarFormationRate(model.gals)
+        #res.GasFraction(model.gals)
+        #res.Metallicity(model.gals)
+        #res.BlackHoleBulgeRelationship(model.gals)
+        #res.QuiescentFraction(model.gals)
+        #res.BulgeMassFraction(model.gals)
+        #res.BaryonFraction(model.gals)
+        #res.SpinDistribution(model.gals)
+        #res.VelocityDistribution(model.gals)
+        #res.MassReservoirScatter(G)
+        #res.SpatialDistribution(model.gals)
 
 # --------------------------------------------------------
 
@@ -356,47 +479,66 @@ class Results:
 
             return ax
 
-        print("Plotting the stellar mass function")
-
-        fig = plt.figure()  # New figure
-        ax = fig.add_subplot(111)  # 1 plot on the figure
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
 
         binwidth = 0.1  # mass function histogram bin width
 
+        # For scaling the observational data, we use the values of the zeroth
+        # model. We also save the plots into the output directory of the zeroth
+        # model. 
         zeroth_hubble_h = (self.models)[0].Hubble_h
         zeroth_IMF = (self.models)[0].IMF
+        zeroth_output_path = (self.models)[0].output_path
 
         ax = plot_SMF_data(ax, zeroth_hubble_h, zeroth_IMF) 
 
         # Go through each of the models and plot. 
         for model in self.models:
 
-            mass = model.gal_mass
+            stellar_mass = model.stellar_mass
             sSFR = model.sSFR
+            tag = model.tag
 
-            mi = np.floor(min(mass)) - 2
-            ma = np.floor(max(mass)) + 2
+            # If we only have one model, we will split it into red and blue
+            # sub-populations.
+            if len(self.models) > 1:
+                color = model.line_color
+                ls = model.line_style
+            else:
+                color = "k"
+                ls = "-"
+
+            mi = np.floor(min(stellar_mass)) - 2
+            ma = np.floor(max(stellar_mass)) + 2
             NB = int((ma - mi) / binwidth)
 
-            (counts, binedges) = np.histogram(mass, range=(mi, ma), bins=NB)
+            (counts, binedges) = np.histogram(stellar_mass, range=(mi, ma),
+                                              bins=NB)
 
             # Set the x-axis values to be the centre of the bins
             xaxeshisto = binedges[:-1] + 0.5 * binwidth
             
-            # additionally calculate red
-            w = np.where(sSFR < 10.0**sSFRcut)[0]
-            massRED = mass[w]
-            (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
+            # If we're plotting one model, calculate red and blue populations.
+            if len(self.models) > 1: 
+                w = np.where(sSFR < 10.0**sSFRcut)[0]
+                massRED = stellar_mass[w]
+                (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
 
-            # additionally calculate blue
-            w = np.where(sSFR > 10.0**sSFRcut)[0]
-            massBLU = mass[w]
-            (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
+                w = np.where(sSFR > 10.0**sSFRcut)[0]
+                massBLU = stellar_mass[w]
+                (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
                     
             # Overplot the model histograms
-            ax.plot(xaxeshisto, counts    / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'k-', label='Model - All')
-            ax.plot(xaxeshisto, countsRED / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'r:', lw=2, label='Model - Red')
-            ax.plot(xaxeshisto, countsBLU / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'b:', lw=2, label='Model - Blue')
+            ax.plot(xaxeshisto, counts / model.volume *model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth,
+                    color=color, ls=ls, label=tag + " - All")
+
+            # If we only have one model, plot the sub-populations.
+            if len(self.models) == 1:
+                ax.plot(xaxeshisto, countsRED / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth,
+                        'r:', lw=2, label=tag + " - Red")
+                ax.plot(xaxeshisto, countsBLU / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth,
+                        'b:', lw=2, label=tag + " - Blue")
 
         ax.set_yscale('log', nonposy='clip')
         ax.set_xlim([8.0, 12.5])
@@ -416,7 +558,8 @@ class Results:
         for t in leg.get_texts():  # Reduce the size of the text
             t.set_fontsize('medium')
 
-        outputFile = OutputDir + '1.StellarMassFunction' + OutputFormat
+        outputFile = "{0}/1.StellarMassFunction{1}".format(zeroth_output_path,
+                                                           OutputFormat)
         fig.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
@@ -1353,69 +1496,70 @@ class Results:
 
 if __name__ == '__main__':
 
-    from optparse import OptionParser
     import os
 
-    parser = OptionParser()
-    parser.add_option(
-        '-d',
-        '--dir_name',
-        dest='DirName',
-        default='./millennium/',
-        help='input directory name (default: ./millennium/)',
-        metavar='DIR',
-        )
-    parser.add_option(
-        '-f',
-        '--file_base',
-        dest='FileName',
-        default='model_z0.000',
-        help='filename base (default: model_z0.000)',
-        metavar='FILE',
-        )
-    parser.add_option(
-        '-n',
-        '--file_range',
-        type='int',
-        nargs=2,
-        dest='FileRange',
-        default=(0, 7),
-        help='first and last filenumbers (default: 0 7)',
-        metavar='FIRST LAST',
-        )
+#python3 allresults.py -d kali_512/ -f kali_512_z5.829 -n 0 7
+#(reverse-i-search)`allres': python3 allresults.py -d millennium/ -f model_z0.000 -n 0 7
 
-    (opt, args) = parser.parse_args()
+    model0_dir_name = "kali_512/"
+    model0_file_name = "kali_512_z5.829"
+    model0_first_file = 0
+    model0_last_file = 7
+    model0_simulation = 2
+    model0_IMF = 0
+    model0_tag = "Kali512"
+    model0_line_color = "r"
+    model0_line_style = "-"
 
-    if opt.DirName[-1] != '/':
-        opt.DirName += '/'
+    model1_dir_name = "millennium/"
+    model1_file_name = "model_z0.000"
+    model1_first_file = 0
+    model1_last_file = 7
+    model1_simulation = 0
+    model1_IMF = 0
+    model1_tag = "Mini-Millennium"
+    model1_line_color = "b"
+    model1_line_style = "--"
 
-    OutputDir = opt.DirName + 'plots/'
+    dir_names = [model0_dir_name, model1_dir_name]
+    file_names = [model0_file_name, model1_file_name]
+    first_files = [model0_first_file, model1_first_file]
+    last_files = [model0_last_file, model1_last_file]
+    simulations = [model0_simulation, model1_simulation]
+    IMFs = [model0_IMF, model1_IMF]
+    tags = [model0_tag, model1_tag]
+    line_colors = [model0_line_color, model1_line_color]
+    line_styles = [model0_line_style, model1_line_style]
 
-    if not os.path.exists(OutputDir):
-        os.makedirs(OutputDir)
+    model_paths = []
+    output_paths = []
+
+    for dir_name, file_name  in zip(dir_names, file_names):
+
+        model_path = "{0}/{1}".format(dir_name, file_name) 
+        model_paths.append(model_path)
+
+        output_path = dir_name + "plots/"
+
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+        output_paths.append(output_path)
 
     print("Running allresults...")
 
-    FirstFile = opt.FileRange[0]
-    LastFile = opt.FileRange[1]
+    # First lets build a dictionary out of all the model parameters passed.
+    model_dict = { "model_path" : model_paths,
+                   "output_path" : output_paths,
+                   "first_file" : first_files,
+                   "last_file" : last_files,
+                   "simulation" : simulations,
+                   "IMF" : IMFs,
+                   "tag" : tags,
+                   "line_color" : line_colors,
+                   "line_style" : line_styles}
 
-    fin_base = opt.DirName + opt.FileName
+    plot_toggles = { "SMF" : 1}
 
-    res = Results([fin_base], [FirstFile], [LastFile], [0], [0])
-    #G = res.read_gals(fin_base, FirstFile, LastFile)
-
-    res.StellarMassFunction()
-    #res.BaryonicMassFunction(model.gals)
-    #res.GasMassFunction(model.gals)
-    #res.BaryonicTullyFisher(model.gals)
-    #res.SpecificStarFormationRate(model.gals)
-    #res.GasFraction(model.gals)
-    #res.Metallicity(model.gals)
-    #res.BlackHoleBulgeRelationship(model.gals)
-    #res.QuiescentFraction(model.gals)
-    #res.BulgeMassFraction(model.gals)
-    #res.BaryonFraction(model.gals)
-    #res.SpinDistribution(model.gals)
-    #res.VelocityDistribution(model.gals)
-    #res.MassReservoirScatter(G)
-    #res.SpatialDistribution(model.gals)
+    results = Results(model_dict, plot_toggles)
+    results.do_plots()
