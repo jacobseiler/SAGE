@@ -39,29 +39,36 @@ OutputList = []
 
 class Model:
 
-    def __init__(self, file_path, first_file, last_file, which_simulation):
+    def __init__(self, file_path, first_file, last_file, simulation, IMF):
 
         self.file_path = file_path
-        self.simulation = which_simulation
-        self.set_cosmology(which_simulation)
+        self.simulation = simulation 
+        self.IMF = IMF 
+
+        self.set_cosmology(simulation)
         self.gals = self.read_gals(file_path, first_file, last_file)
 
         self.calc_properties() 
 
-    def set_cosmology(self, which_simulation):
+    def set_cosmology(self, simulation):
 
         """Here we set up some of the variables which will be global to this
         class."""
 
-        if which_simulation == 0:    # Mini-Millennium
-          self.Hubble_h = 0.73
+        if simulation == 0:    # Mini-Millennium
+          self.Hubble_h = 0.73 
           self.BoxSize = 62.5       # Mpc/h
           self.MaxTreeFiles = 8     # FilesPerSnapshot
 
-        elif which_simulation == 1:  # Full Millennium
+        elif simulation == 1:  # Full Millennium
           self.Hubble_h = 0.73
           self.BoxSize = 500        # Mpc/h
           self.MaxTreeFiles = 512   # FilesPerSnapshot
+
+        elif simulation == 2: # Kali 512
+          self.Hubble_h = 0.681
+          self.BoxSize = 108.96     # Mpc/h 
+          self.MaxTreeFiles = 8     # FilesPerSnapshot
 
         else:
           print("Please pick a valid simulation!")
@@ -225,161 +232,192 @@ class Model:
         return 
 
 
-
-
 class Results:
 
     """ The following methods of this class generate the figures and plot them.
     """
 
-    def __init__(self):
+    def __init__(self, model_paths, model_first_file, model_last_file,
+                 model_simulation, model_IMF, model_tags):
+
+        # We will pass a list of model fnames/file numbers/etc that correspond
+        # to each model that we want to plot. We will initialise each of these
+        # and create a list of models which will be an attribute of the Results
+        # class.
+        all_models = []
+
+        for (path, first_file, last_file, simulation, IMF) in \
+                zip(model_paths, model_first_file, model_last_file,
+                    model_simulation, model_IMF):
+
+            model = Model(path, first_file, last_file, simulation, IMF) 
+
+            all_models.append(model)
+
+        self.models = all_models
+
+        self.model_tags = model_tags
 
         return
 
 # --------------------------------------------------------
 
-    def StellarMassFunction(self, model):
+    def StellarMassFunction(self):
+
+        def plot_SMF_data(ax, hubble_h, IMF):
+
+            # Baldry+ 2008 modified data used for the MCMC fitting
+            Baldry = np.array([
+                [7.05, 1.3531e-01, 6.0741e-02],
+                [7.15, 1.3474e-01, 6.0109e-02],
+                [7.25, 2.0971e-01, 7.7965e-02],
+                [7.35, 1.7161e-01, 3.1841e-02],
+                [7.45, 2.1648e-01, 5.7832e-02],
+                [7.55, 2.1645e-01, 3.9988e-02],
+                [7.65, 2.0837e-01, 4.8713e-02],
+                [7.75, 2.0402e-01, 7.0061e-02],
+                [7.85, 1.5536e-01, 3.9182e-02],
+                [7.95, 1.5232e-01, 2.6824e-02],
+                [8.05, 1.5067e-01, 4.8824e-02],
+                [8.15, 1.3032e-01, 2.1892e-02],
+                [8.25, 1.2545e-01, 3.5526e-02],
+                [8.35, 9.8472e-02, 2.7181e-02],
+                [8.45, 8.7194e-02, 2.8345e-02],
+                [8.55, 7.0758e-02, 2.0808e-02],
+                [8.65, 5.8190e-02, 1.3359e-02],
+                [8.75, 5.6057e-02, 1.3512e-02],
+                [8.85, 5.1380e-02, 1.2815e-02],
+                [8.95, 4.4206e-02, 9.6866e-03],
+                [9.05, 4.1149e-02, 1.0169e-02],
+                [9.15, 3.4959e-02, 6.7898e-03],
+                [9.25, 3.3111e-02, 8.3704e-03],
+                [9.35, 3.0138e-02, 4.7741e-03],
+                [9.45, 2.6692e-02, 5.5029e-03],
+                [9.55, 2.4656e-02, 4.4359e-03],
+                [9.65, 2.2885e-02, 3.7915e-03],
+                [9.75, 2.1849e-02, 3.9812e-03],
+                [9.85, 2.0383e-02, 3.2930e-03],
+                [9.95, 1.9929e-02, 2.9370e-03],
+                [10.05, 1.8865e-02, 2.4624e-03],
+                [10.15, 1.8136e-02, 2.5208e-03],
+                [10.25, 1.7657e-02, 2.4217e-03],
+                [10.35, 1.6616e-02, 2.2784e-03],
+                [10.45, 1.6114e-02, 2.1783e-03],
+                [10.55, 1.4366e-02, 1.8819e-03],
+                [10.65, 1.2588e-02, 1.8249e-03],
+                [10.75, 1.1372e-02, 1.4436e-03],
+                [10.85, 9.1213e-03, 1.5816e-03],
+                [10.95, 6.1125e-03, 9.6735e-04],
+                [11.05, 4.3923e-03, 9.6254e-04],
+                [11.15, 2.5463e-03, 5.0038e-04],
+                [11.25, 1.4298e-03, 4.2816e-04],
+                [11.35, 6.4867e-04, 1.6439e-04],
+                [11.45, 2.8294e-04, 9.9799e-05],
+                [11.55, 1.0617e-04, 4.9085e-05],
+                [11.65, 3.2702e-05, 2.4546e-05],
+                [11.75, 1.2571e-05, 1.2571e-05],
+                [11.85, 8.4589e-06, 8.4589e-06],
+                [11.95, 7.4764e-06, 7.4764e-06],
+                ], dtype=np.float32)
+
+            Baldry_xval = np.log10(10 ** Baldry[:, 0] / hubble_h / hubble_h)
+            if(IMF == 1):
+                Baldry_xval = Baldry_xval - 0.26  # convert back to Chabrier IMF
+
+            Baldry_yvalU = (Baldry[:, 1]+Baldry[:, 2]) * pow(hubble_h, 3)
+            Baldry_yvalL = (Baldry[:, 1]-Baldry[:, 2]) * pow(hubble_h, 3) 
+
+            ax.fill_between(Baldry_xval, Baldry_yvalU, Baldry_yvalL,
+                            facecolor='purple', alpha=0.25,
+                            label='Baldry et al. 2008 (z=0.1)')
+
+            # This next line is just to get the shaded region to appear correctly in the legend
+            ax.plot(np.nan, np.nan, label='Baldry et al. 2008', color='purple', alpha=0.3)
+
+            # Finally plot the data
+            # plt.errorbar(
+            #     Baldry[:, 0],
+            #     Baldry[:, 1],
+            #     yerr=Baldry[:, 2],
+            #     color='g',
+            #     linestyle=':',
+            #     lw = 1.5,
+            #     label='Baldry et al. 2008',
+            #     )
+
+            # # Cole et al. 2001 SMF (h=1.0 converted to h=0.73)
+            # M = np.arange(7.0, 13.0, 0.01)
+            # Mstar = np.log10(7.07*1.0e10 /model.Hubble_h/model.Hubble_h)
+            # alpha = -1.18
+            # phistar = 0.009 *model.Hubble_h*model.Hubble_h*model.Hubble_h
+            # xval = 10.0 ** (M-Mstar)
+            # yval = np.log(10.) * phistar * xval ** (alpha+1) * np.exp(-xval)      
+            # plt.plot(M, yval, 'g--', lw=1.5, label='Cole et al. 2001')  # Plot the SMF
+
+            return ax
 
         print("Plotting the stellar mass function")
 
-        plt.figure()  # New figure
-        ax = plt.subplot(111)  # 1 plot on the figure
+        fig = plt.figure()  # New figure
+        ax = fig.add_subplot(111)  # 1 plot on the figure
 
         binwidth = 0.1  # mass function histogram bin width
 
-        # Grab the needed quantities.
-        mass = model.gal_mass
-        sSFR = model.sSFR
+        zeroth_hubble_h = (self.models)[0].Hubble_h
+        zeroth_IMF = (self.models)[0].IMF
 
-        print(mass)
-        mi = np.floor(min(mass)) - 2
-        ma = np.floor(max(mass)) + 2
-        NB = int((ma - mi) / binwidth)
+        ax = plot_SMF_data(ax, zeroth_hubble_h, zeroth_IMF) 
 
-        (counts, binedges) = np.histogram(mass, range=(mi, ma), bins=NB)
+        # Go through each of the models and plot. 
+        for model in self.models:
 
-        # Set the x-axis values to be the centre of the bins
-        xaxeshisto = binedges[:-1] + 0.5 * binwidth
-        
-        # additionally calculate red
-        w = np.where(sSFR < 10.0**sSFRcut)[0]
-        massRED = mass[w]
-        (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
+            mass = model.gal_mass
+            sSFR = model.sSFR
 
-        # additionally calculate blue
-        w = np.where(sSFR > 10.0**sSFRcut)[0]
-        massBLU = mass[w]
-        (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
+            mi = np.floor(min(mass)) - 2
+            ma = np.floor(max(mass)) + 2
+            NB = int((ma - mi) / binwidth)
 
-        # Baldry+ 2008 modified data used for the MCMC fitting
-        Baldry = np.array([
-            [7.05, 1.3531e-01, 6.0741e-02],
-            [7.15, 1.3474e-01, 6.0109e-02],
-            [7.25, 2.0971e-01, 7.7965e-02],
-            [7.35, 1.7161e-01, 3.1841e-02],
-            [7.45, 2.1648e-01, 5.7832e-02],
-            [7.55, 2.1645e-01, 3.9988e-02],
-            [7.65, 2.0837e-01, 4.8713e-02],
-            [7.75, 2.0402e-01, 7.0061e-02],
-            [7.85, 1.5536e-01, 3.9182e-02],
-            [7.95, 1.5232e-01, 2.6824e-02],
-            [8.05, 1.5067e-01, 4.8824e-02],
-            [8.15, 1.3032e-01, 2.1892e-02],
-            [8.25, 1.2545e-01, 3.5526e-02],
-            [8.35, 9.8472e-02, 2.7181e-02],
-            [8.45, 8.7194e-02, 2.8345e-02],
-            [8.55, 7.0758e-02, 2.0808e-02],
-            [8.65, 5.8190e-02, 1.3359e-02],
-            [8.75, 5.6057e-02, 1.3512e-02],
-            [8.85, 5.1380e-02, 1.2815e-02],
-            [8.95, 4.4206e-02, 9.6866e-03],
-            [9.05, 4.1149e-02, 1.0169e-02],
-            [9.15, 3.4959e-02, 6.7898e-03],
-            [9.25, 3.3111e-02, 8.3704e-03],
-            [9.35, 3.0138e-02, 4.7741e-03],
-            [9.45, 2.6692e-02, 5.5029e-03],
-            [9.55, 2.4656e-02, 4.4359e-03],
-            [9.65, 2.2885e-02, 3.7915e-03],
-            [9.75, 2.1849e-02, 3.9812e-03],
-            [9.85, 2.0383e-02, 3.2930e-03],
-            [9.95, 1.9929e-02, 2.9370e-03],
-            [10.05, 1.8865e-02, 2.4624e-03],
-            [10.15, 1.8136e-02, 2.5208e-03],
-            [10.25, 1.7657e-02, 2.4217e-03],
-            [10.35, 1.6616e-02, 2.2784e-03],
-            [10.45, 1.6114e-02, 2.1783e-03],
-            [10.55, 1.4366e-02, 1.8819e-03],
-            [10.65, 1.2588e-02, 1.8249e-03],
-            [10.75, 1.1372e-02, 1.4436e-03],
-            [10.85, 9.1213e-03, 1.5816e-03],
-            [10.95, 6.1125e-03, 9.6735e-04],
-            [11.05, 4.3923e-03, 9.6254e-04],
-            [11.15, 2.5463e-03, 5.0038e-04],
-            [11.25, 1.4298e-03, 4.2816e-04],
-            [11.35, 6.4867e-04, 1.6439e-04],
-            [11.45, 2.8294e-04, 9.9799e-05],
-            [11.55, 1.0617e-04, 4.9085e-05],
-            [11.65, 3.2702e-05, 2.4546e-05],
-            [11.75, 1.2571e-05, 1.2571e-05],
-            [11.85, 8.4589e-06, 8.4589e-06],
-            [11.95, 7.4764e-06, 7.4764e-06],
-            ], dtype=np.float32)
-        
-        # Finally plot the data
-        # plt.errorbar(
-        #     Baldry[:, 0],
-        #     Baldry[:, 1],
-        #     yerr=Baldry[:, 2],
-        #     color='g',
-        #     linestyle=':',
-        #     lw = 1.5,
-        #     label='Baldry et al. 2008',
-        #     )
+            (counts, binedges) = np.histogram(mass, range=(mi, ma), bins=NB)
 
-        Baldry_xval = np.log10(10 ** Baldry[:, 0]  /model.Hubble_h/model.Hubble_h)
-        if(whichimf == 1):  Baldry_xval = Baldry_xval - 0.26  # convert back to Chabrier IMF
-        Baldry_yvalU = (Baldry[:, 1]+Baldry[:, 2]) * model.Hubble_h*model.Hubble_h*model.Hubble_h
-        Baldry_yvalL = (Baldry[:, 1]-Baldry[:, 2]) * model.Hubble_h*model.Hubble_h*model.Hubble_h
+            # Set the x-axis values to be the centre of the bins
+            xaxeshisto = binedges[:-1] + 0.5 * binwidth
+            
+            # additionally calculate red
+            w = np.where(sSFR < 10.0**sSFRcut)[0]
+            massRED = mass[w]
+            (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
 
-        plt.fill_between(Baldry_xval, Baldry_yvalU, Baldry_yvalL, 
-            facecolor='purple', alpha=0.25, label='Baldry et al. 2008 (z=0.1)')
+            # additionally calculate blue
+            w = np.where(sSFR > 10.0**sSFRcut)[0]
+            massBLU = mass[w]
+            (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
+                    
+            # Overplot the model histograms
+            ax.plot(xaxeshisto, counts    / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'k-', label='Model - All')
+            ax.plot(xaxeshisto, countsRED / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'r:', lw=2, label='Model - Red')
+            ax.plot(xaxeshisto, countsBLU / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'b:', lw=2, label='Model - Blue')
 
-        # This next line is just to get the shaded region to appear correctly in the legend
-        plt.plot(xaxeshisto, counts / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, label='Baldry et al. 2008', color='purple', alpha=0.3)
-
-        # # Cole et al. 2001 SMF (h=1.0 converted to h=0.73)
-        # M = np.arange(7.0, 13.0, 0.01)
-        # Mstar = np.log10(7.07*1.0e10 /model.Hubble_h/model.Hubble_h)
-        # alpha = -1.18
-        # phistar = 0.009 *model.Hubble_h*model.Hubble_h*model.Hubble_h
-        # xval = 10.0 ** (M-Mstar)
-        # yval = np.log(10.) * phistar * xval ** (alpha+1) * np.exp(-xval)      
-        # plt.plot(M, yval, 'g--', lw=1.5, label='Cole et al. 2001')  # Plot the SMF
-        
-        # Overplot the model histograms
-        plt.plot(xaxeshisto, counts    / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'k-', label='Model - All')
-        plt.plot(xaxeshisto, countsRED / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'r:', lw=2, label='Model - Red')
-        plt.plot(xaxeshisto, countsBLU / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'b:', lw=2, label='Model - Blue')
-
-        plt.yscale('log', nonposy='clip')
-        plt.axis([8.0, 12.5, 1.0e-6, 1.0e-1])
+        ax.set_yscale('log', nonposy='clip')
+        ax.set_xlim([8.0, 12.5])
+        ax.set_ylim([1.0e-6, 1.0e-1])
 
         # Set the x-axis minor ticks
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
 
-        plt.ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')  # Set the y...
-        plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
+        ax.set_ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')  # Set the y...
+        ax.set_xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
 
-        plt.text(12.2, 0.03, model.simulation, size = 'large')
+        ax.text(12.2, 0.03, model.simulation, size = 'large')
 
-        leg = plt.legend(loc='lower left', numpoints=1,
-                         labelspacing=0.1)
+        leg = ax.legend(loc='lower left', numpoints=1,
+                        labelspacing=0.1)
         leg.draw_frame(False)  # Don't want a box frame
         for t in leg.get_texts():  # Reduce the size of the text
             t.set_fontsize('medium')
 
         outputFile = OutputDir + '1.StellarMassFunction' + OutputFormat
-        plt.savefig(outputFile)  # Save the figure
+        fig.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
 
@@ -1356,8 +1394,6 @@ if __name__ == '__main__':
     if not os.path.exists(OutputDir):
         os.makedirs(OutputDir)
 
-    res = Results()
-
     print("Running allresults...")
 
     FirstFile = opt.FileRange[0]
@@ -1365,10 +1401,10 @@ if __name__ == '__main__':
 
     fin_base = opt.DirName + opt.FileName
 
-    model = Model(fin_base, FirstFile, LastFile, 0)
+    res = Results([fin_base], [FirstFile], [LastFile], [0], [0])
     #G = res.read_gals(fin_base, FirstFile, LastFile)
 
-    res.StellarMassFunction(model)
+    res.StellarMassFunction()
     #res.BaryonicMassFunction(model.gals)
     #res.GasMassFunction(model.gals)
     #res.BaryonicTullyFisher(model.gals)
