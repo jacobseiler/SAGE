@@ -176,7 +176,7 @@ void load_tree_hdf5(int32_t filenr, int32_t treenr)
 
   /* Halo Properties */ 
   READ_TREE_PROPERTY(Len, Len, 0, int);
-  READ_TREE_PROPERTY(M_Mean200, M_mean200, 1, float);
+  READ_TREE_PROPERTY(M_Mean200, M_Mean200, 1, float);
   READ_TREE_PROPERTY(Mvir, Mvir, 1, float);
   READ_TREE_PROPERTY(M_TopHat, M_TopHat, 1, float);
   READ_TREE_PROPERTY_MULTIPLEDIM(Pos, Pos, 1, float);

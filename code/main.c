@@ -114,8 +114,15 @@ int main(int argc, char **argv)
     sprintf(bufz0, "%s/%s.%d%s", SimulationDir, TreeName, filenr, TreeExtension);
     if(!(fd = fopen(bufz0, "r")))
     {
-      printf("-- missing tree %s ... skipping\n", bufz0);
-      continue;  // tree file does not exist, move along
+      printf("Can't find Tree %s. Trying a different naming format.\n", bufz0);
+
+      // Try a different format...
+      snprintf(bufz0, MAX_STRING_LEN, "%s/%s_%03d%s.dat", SimulationDir, TreeName, filenr, TreeExtension);
+      if(!(fd = fopen(bufz0, "r")))
+      {
+        printf("Can't find Tree %s either. Skipping.\n", bufz0);
+        continue;  // tree file does not exist, move along
+      }
     }
     else
       fclose(fd);

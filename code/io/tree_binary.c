@@ -29,8 +29,16 @@ void load_tree_table_binary(int32_t filenr)
   snprintf(buf, MAX_STRING_LEN, "%s/%s.%d%s", SimulationDir, TreeName, filenr, TreeExtension);
   if(!(load_fd = fopen(buf, "r")))
   {
-    printf("can't open file `%s'\n", buf);
-    ABORT(0);
+
+    printf("can't open file `%s'. Trying a different format.\n", buf);
+
+    // Try a different format...
+    snprintf(buf, MAX_STRING_LEN, "%s/%s_%03d%s.dat", SimulationDir, TreeName, filenr, TreeExtension);
+    if(!(load_fd = fopen(buf, "r")))
+    {
+      printf("can't open file `%s'\n", buf);
+      ABORT(0);
+    }
   }
 
   myfread(&Ntrees, 1, sizeof(int), load_fd);
