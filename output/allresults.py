@@ -96,6 +96,10 @@ class Model:
 
     sSFR : List of floats, length is number of galaxies
         Specific star formation rate of each galaxy
+
+    baryon_mass : list of floats, length is number of galaxies
+        Mass of the baryons (stellar mass + cold gas) of each galaxy. 1.0e10
+        Msun.
     """
 
     def __init__(self, model_dict):
@@ -277,14 +281,23 @@ class Model:
 
         G = self.gals
 
-        w = np.where(G.StellarMass > 0.0)[0]
-        stellar_mass = np.log10(G.StellarMass[w] * 1.0e10 / self.Hubble_h)
-        sSFR = (G.SfrDisk[w] + G.SfrBulge[w]) / (G.StellarMass[w] * 1.0e10 / self.Hubble_h)
+        non_zero_stellar = np.where(G.StellarMass > 0.0)[0]
+        stellar_mass = np.log10(G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
+        sSFR = (G.SfrDisk[non_zero_stellar] + G.SfrBulge[non_zero_stellar]) / \
+               (G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
 
         self.stellar_mass = stellar_mass 
         self.sSFR = sSFR
 
-        return 
+        non_zero_baryon = np.where(G.StellarMass + G.ColdGas > 0.0)[0]
+        baryon_mass = np.log10((G.StellarMass[non_zero_baryon] + \
+                                G.ColdGas[non_zero_baryon]) * 1.0e10 \
+                                / self.Hubble_h)
+
+
+        self.baryon_mass = baryon_mass
+
+        return
 
 
 class Results:
