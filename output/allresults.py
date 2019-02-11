@@ -277,25 +277,26 @@ class Model:
         return G
 
 
-    def calc_properties(self):
+    def calc_properties(self, plot_toggles):
 
         G = self.gals
 
-        non_zero_stellar = np.where(G.StellarMass > 0.0)[0]
-        stellar_mass = np.log10(G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
-        sSFR = (G.SfrDisk[non_zero_stellar] + G.SfrBulge[non_zero_stellar]) / \
-               (G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
+        if plot_toggles["SMF"]:
+            non_zero_stellar = np.where(G.StellarMass > 0.0)[0]
+            stellar_mass = np.log10(G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
+            sSFR = (G.SfrDisk[non_zero_stellar] + G.SfrBulge[non_zero_stellar]) / \
+                   (G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
 
-        self.stellar_mass = stellar_mass 
-        self.sSFR = sSFR
+            self.stellar_mass = stellar_mass 
+            self.sSFR = sSFR
 
-        non_zero_baryon = np.where(G.StellarMass + G.ColdGas > 0.0)[0]
-        baryon_mass = np.log10((G.StellarMass[non_zero_baryon] + \
-                                G.ColdGas[non_zero_baryon]) * 1.0e10 \
-                                / self.Hubble_h)
+        if plot_toggles["BMF"]:
+            non_zero_baryon = np.where(G.StellarMass + G.ColdGas > 0.0)[0]
+            baryon_mass = np.log10((G.StellarMass[non_zero_baryon] + \
+                                    G.ColdGas[non_zero_baryon]) * 1.0e10 \
+                                    / self.Hubble_h)
 
-
-        self.baryon_mass = baryon_mass
+            self.baryon_mass = baryon_mass
 
         return
 
@@ -307,7 +308,10 @@ class Results:
     Attributes
     ----------
 
-    models : List of ``Model`` class instances
+    num_models : Integer
+        Number of models being plotted.
+
+    models : List of ``Model`` class instances with length ``num_models``
         Models that we will be plotting.
 
     plot_toggles : Dictionary
@@ -317,33 +321,37 @@ class Results:
 
     def __init__(self, all_models_dict, plot_toggles):
         """
-        Initialises the individual Model class instances and adds them to the
-        ``Results`` class instance.
+        Initialises the individual ``Model`` class instances and adds them to
+        the ``Results`` class instance.
 
         Parameters 
         ----------
 
         all_models_dict : Dictionary 
-            Dictionary containing the parameter values for each Model instance.
-            Refer to the ``Model`` class for full details on this dictionary.
+            Dictionary containing the parameter values for each ``Model``
+            instance. Refer to the ``Model`` class for full details on this
+            dictionary.
 
         plot_toggles : Dictionary
-            Specifies which plots will be generated. An entry of `1` denotes
-            plotting, otherwise it will be skipped.             
+            Specifies which plots will be generated. An entry of 1 denotes
+            plotting, otherwise it will be skipped.
         """
+
+        self.num_models = len(all_models_dict["model_path"])
 
         # We will create a list that holds the Model class for each model.
         all_models = []
 
         # Now let's go through each model, build an individual dictionary for
         # that model and then create a Model instance using it.
-        for model_num in range(len(all_models_dict["model_path"])):
+        for model_num in range(self.num_models):
 
             model_dict = {}
             for field in all_models_dict.keys():
 
                 model_dict[field] = all_models_dict[field][model_num]
 
+            # Instantiate a Model using these properties.
             model = Model(model_dict)
 
             # Cosmology depends upon the simulation specified.
@@ -354,14 +362,14 @@ class Results:
                                          model_dict["first_file"],
                                          model_dict["last_file"])
 
-            # Then calculate mass/SFR/etc of these galaxies.
-            model.calc_properties() 
+            # Then calculate mass/SFR/etc of these galaxies. Properties
+            # calculated depends upon the plots we're making.
+            model.calc_properties(plot_toggles) 
 
             # Append to the global list.
             all_models.append(model)
 
         self.models = all_models
-
         self.plot_toggles = plot_toggles
 
 
@@ -381,7 +389,10 @@ class Results:
         if plot_toggles["SMF"] == 1:
             print("Plotting the Stellar Mass Function.")
             self.StellarMassFunction()
-        #res.BaryonicMassFunction(model.gals)
+
+        if plot_toggles["BMF"] == 1:
+            print("Plotting the Baryon Mass Function.")
+            self.BaryonicMassFunction()
         #res.GasMassFunction(model.gals)
         #res.BaryonicTullyFisher(model.gals)
         #res.SpecificStarFormationRate(model.gals)
@@ -583,7 +594,7 @@ class Results:
 
 # ---------------------------------------------------------
 
-    def BaryonicMassFunction(self, G):
+    def BaryonicMassFunction(self):
 
         print("Plotting the baryonic mass function")
 
@@ -591,37 +602,41 @@ class Results:
         ax = plt.subplot(111)  # 1 plot on the figure
 
         binwidth = 0.1  # mass function histogram bin width
-      
-        # calculate BMF
-        w = np.where(G.StellarMass + G.ColdGas > 0.0)[0]
-        mass = np.log10((G.StellarMass[w] + G.ColdGas[w]) * 1.0e10 / self.Hubble_h)
 
-        mi = np.floor(min(mass)) - 2
-        ma = np.floor(max(mass)) + 2
-        NB = (ma - mi) / binwidth
+        zeroth_output_path = (self.models)[0].output_path
 
-        (counts, binedges) = np.histogram(mass, range=(mi, ma), bins=NB)
+        for model in self.models:
 
-        # Set the x-axis values to be the centre of the bins
-        xaxeshisto = binedges[:-1] + 0.5 * binwidth
-       
-        # Bell et al. 2003 BMF (h=1.0 converted to h=0.73)
-        M = np.arange(7.0, 13.0, 0.01)
-        Mstar = np.log10(5.3*1.0e10 /self.Hubble_h/self.Hubble_h)
-        alpha = -1.21
-        phistar = 0.0108 *self.Hubble_h*self.Hubble_h*self.Hubble_h
-        xval = 10.0 ** (M-Mstar)
-        yval = np.log(10.) * phistar * xval ** (alpha+1) * np.exp(-xval)
-        
-        if(whichimf == 0):
-            # converted diet Salpeter IMF to Salpeter IMF
-            plt.plot(np.log10(10.0**M /0.7), yval, 'b-', lw=2.0, label='Bell et al. 2003')  # Plot the SMF
-        elif(whichimf == 1):
-            # converted diet Salpeter IMF to Salpeter IMF, then to Chabrier IMF
-            plt.plot(np.log10(10.0**M /0.7 /1.8), yval, 'g--', lw=1.5, label='Bell et al. 2003')  # Plot the SMF
+            baryon_mass = model.baryon_mass
+            tag = model.tag
 
-        # Overplot the model histograms
-        plt.plot(xaxeshisto, counts / self.volume * self.Hubble_h*self.Hubble_h*self.Hubble_h / binwidth, 'k-', label='Model')
+            mi = np.floor(min(baryon_mass)) - 2
+            ma = np.floor(max(baryon_mass)) + 2
+            NB = int((ma - mi) / binwidth)
+
+            (counts, binedges) = np.histogram(baryon_mass, range=(mi, ma), bins=NB)
+
+            # Set the x-axis values to be the centre of the bins
+            xaxeshisto = binedges[:-1] + 0.5 * binwidth
+
+            '''
+            # Bell et al. 2003 BMF (h=1.0 converted to h=0.73)
+            M = np.arange(7.0, 13.0, 0.01)
+            Mstar = np.log10(5.3*1.0e10 /self.Hubble_h/self.Hubble_h)
+            alpha = -1.21
+            phistar = 0.0108 *self.Hubble_h*self.Hubble_h*self.Hubble_h
+            xval = 10.0 ** (M-Mstar)
+            yval = np.log(10.) * phistar * xval ** (alpha+1) * np.exp(-xval)
+            
+            if(whichimf == 0):
+                # converted diet Salpeter IMF to Salpeter IMF
+                plt.plot(np.log10(10.0**M /0.7), yval, 'b-', lw=2.0, label='Bell et al. 2003')  # Plot the SMF
+            elif(whichimf == 1):
+                # converted diet Salpeter IMF to Salpeter IMF, then to Chabrier IMF
+                plt.plot(np.log10(10.0**M /0.7 /1.8), yval, 'g--', lw=1.5, label='Bell et al. 2003')  # Plot the SMF
+            '''
+            # Overplot the model histograms
+            plt.plot(xaxeshisto, counts / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'k-', label=tag)
 
         plt.yscale('log', nonposy='clip')
         plt.axis([8.0, 12.5, 1.0e-6, 1.0e-1])
@@ -638,7 +653,7 @@ class Results:
         for t in leg.get_texts():  # Reduce the size of the text
             t.set_fontsize('medium')
 
-        outputFile = OutputDir + '2.BaryonicMassFunction' + OutputFormat
+        outputFile = "{0}/2.BaryonicMassFunction{1}".format(zeroth_output_path, OutputFormat) 
         plt.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
@@ -1572,7 +1587,8 @@ if __name__ == '__main__':
                    "line_color" : line_colors,
                    "line_style" : line_styles}
 
-    plot_toggles = { "SMF" : 1}
+    plot_toggles = {"SMF" : 1,
+                    "BMF" : 1}
 
     results = Results(model_dict, plot_toggles)
     results.do_plots()
