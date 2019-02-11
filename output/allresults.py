@@ -103,6 +103,22 @@ class Model:
     """
 
     def __init__(self, model_dict):
+        """
+        Sets the galaxy path and number of files to be read for a model.
+
+        Parameters 
+        ----------
+
+        model_dict : Dictionary 
+            Dictionary containing the parameter values for each ``Model``
+            instance. Refer to the class-level documentation for a full
+            description of this dictionary.
+
+        Returns
+        -------
+
+        None.
+        """
 
         # Set the attributes we were passed.
         for key in model_dict:
@@ -110,77 +126,112 @@ class Model:
 
 
     def set_cosmology(self, simulation):
+        """
+        Sets the relevant cosmological values, size of the simulation box and
+        number of galaxy files.
 
-        """Here we set up some of the variables which will be global to this
-        class."""
+        ..note:: Boxsize is in units of Mpc/h.
+
+        Parameters 
+        ----------
+
+        simulation : {0, 1, 2}
+            Flags which simulation we are using.
+            0: Mini-Millennium,
+            1: Full Millennium,
+            2: Kali (512^3 particles).
+
+        Returns
+        -------
+
+        None.
+        """
 
         if simulation == 0:    # Mini-Millennium
           self.Hubble_h = 0.73 
-          self.BoxSize = 62.5       # Mpc/h
-          self.MaxTreeFiles = 8     # FilesPerSnapshot
+          self.BoxSize = 62.5
+          self.MaxTreeFiles = 8
 
         elif simulation == 1:  # Full Millennium
           self.Hubble_h = 0.73
-          self.BoxSize = 500        # Mpc/h
-          self.MaxTreeFiles = 512   # FilesPerSnapshot
+          self.BoxSize = 500
+          self.MaxTreeFiles = 512
 
         elif simulation == 2: # Kali 512
           self.Hubble_h = 0.681
-          self.BoxSize = 108.96     # Mpc/h 
-          self.MaxTreeFiles = 8     # FilesPerSnapshot
+          self.BoxSize = 108.96
+          self.MaxTreeFiles = 8
 
         else:
           print("Please pick a valid simulation!")
           exit(1)
 
     def read_gals(self, model_name, first_file, last_file):
+        """
+        Reads all the galaxy files for a model.
+
+        Parameters 
+        ----------
+
+        model_name : String
+            Base path to the galaxy files.  Does not include the file number or
+            trailing underscore.
+
+        first_file, last_file : Integers
+            The file range to read.
+
+        Returns
+        -------
+
+        None.
+        """
 
         # The input galaxy structure:
         Galdesc_full = [
-            ('SnapNum'                      , np.int32),                    
-            ('Type'                         , np.int32),                    
-            ('GalaxyIndex'                  , np.int64),                    
-            ('CentralGalaxyIndex'           , np.int64),                    
-            ('SAGEHaloIndex'                , np.int32),                    
-            ('SAGETreeIndex'                , np.int32),                    
-            ('SimulationHaloIndex'          , np.int64),                    
-            ('mergeType'                    , np.int32),                    
-            ('mergeIntoID'                  , np.int32),                    
-            ('mergeIntoSnapNum'             , np.int32),                    
-            ('dT'                           , np.float32),                    
-            ('Pos'                          , (np.float32, 3)),             
-            ('Vel'                          , (np.float32, 3)),             
-            ('Spin'                         , (np.float32, 3)),             
-            ('Len'                          , np.int32),                    
-            ('Mvir'                         , np.float32),                  
-            ('CentralMvir'                  , np.float32),                  
-            ('Rvir'                         , np.float32),                  
-            ('Vvir'                         , np.float32),                  
-            ('Vmax'                         , np.float32),                  
-            ('VelDisp'                      , np.float32),                  
-            ('ColdGas'                      , np.float32),                  
-            ('StellarMass'                  , np.float32),                  
-            ('BulgeMass'                    , np.float32),                  
-            ('HotGas'                       , np.float32),                  
-            ('EjectedMass'                  , np.float32),                  
-            ('BlackHoleMass'                , np.float32),                  
-            ('IntraClusterStars'            , np.float32),                  
-            ('MetalsColdGas'                , np.float32),                  
-            ('MetalsStellarMass'            , np.float32),                  
-            ('MetalsBulgeMass'              , np.float32),                  
-            ('MetalsHotGas'                 , np.float32),                  
-            ('MetalsEjectedMass'            , np.float32),                  
-            ('MetalsIntraClusterStars'      , np.float32),                  
-            ('SfrDisk'                      , np.float32),                  
-            ('SfrBulge'                     , np.float32),                  
-            ('SfrDiskZ'                     , np.float32),                  
-            ('SfrBulgeZ'                    , np.float32),                  
-            ('DiskRadius'                   , np.float32),                  
-            ('Cooling'                      , np.float32),                  
+            ('SnapNum'                      , np.int32),
+            ('Type'                         , np.int32),
+            ('GalaxyIndex'                  , np.int64),
+            ('CentralGalaxyIndex'           , np.int64),
+            ('SAGEHaloIndex'                , np.int32),
+            ('SAGETreeIndex'                , np.int32),
+            ('SimulationHaloIndex'          , np.int64),
+            ('mergeType'                    , np.int32),
+            ('mergeIntoID'                  , np.int32),
+            ('mergeIntoSnapNum'             , np.int32),
+            ('dT'                           , np.float32),
+            ('Pos'                          , (np.float32, 3)),
+            ('Vel'                          , (np.float32, 3)),
+            ('Spin'                         , (np.float32, 3)),
+            ('Len'                          , np.int32),
+            ('Mvir'                         , np.float32),
+            ('CentralMvir'                  , np.float32),
+            ('Rvir'                         , np.float32),
+            ('Vvir'                         , np.float32),
+            ('Vmax'                         , np.float32),
+            ('VelDisp'                      , np.float32),
+            ('ColdGas'                      , np.float32),
+            ('StellarMass'                  , np.float32),
+            ('BulgeMass'                    , np.float32),
+            ('HotGas'                       , np.float32),
+            ('EjectedMass'                  , np.float32),
+            ('BlackHoleMass'                , np.float32),
+            ('IntraClusterStars'            , np.float32),
+            ('MetalsColdGas'                , np.float32),
+            ('MetalsStellarMass'            , np.float32),
+            ('MetalsBulgeMass'              , np.float32),
+            ('MetalsHotGas'                 , np.float32),
+            ('MetalsEjectedMass'            , np.float32),
+            ('MetalsIntraClusterStars'      , np.float32),
+            ('SfrDisk'                      , np.float32),
+            ('SfrBulge'                     , np.float32),
+            ('SfrDiskZ'                     , np.float32),
+            ('SfrBulgeZ'                    , np.float32),
+            ('DiskRadius'                   , np.float32),
+            ('Cooling'                      , np.float32),
             ('Heating'                      , np.float32),
             ('QuasarModeBHaccretionMass'    , np.float32),
-            ('TimeOfLastMajorMerger'         , np.float32),
-            ('TimeOfLastMinorMerger'         , np.float32),
+            ('TimeOfLastMajorMerger'        , np.float32),
+            ('TimeOfLastMinorMerger'        , np.float32),
             ('OutflowRate'                  , np.float32),
             ('infallMvir'                   , np.float32),
             ('infallVvir'                   , np.float32),
@@ -190,64 +241,65 @@ class Model:
         formats = [Galdesc_full[i][1] for i in range(len(Galdesc_full))]
         Galdesc = np.dtype({'names':names, 'formats':formats}, align=True)
 
-
-        # Initialize variables.
         TotNTrees = 0
         TotNGals = 0
-        FileIndexRanges = []
 
         print("Determining array storage requirements.")
         
         # Read each file and determine the total number of galaxies to be read in
         goodfiles = 0
         for fnr in range(first_file,last_file+1):
-            fname = model_name+'_'+str(fnr)  # Complete filename
+            fname = "{0}_{1}".format(model_name, fnr)
 
             if not os.path.isfile(fname):
-              # print "File\t%s  \tdoes not exist!  Skipping..." % (fname)
-              continue
+                print("File\t{0} \tdoes not exist!".format(fname))
+                raise FileNotFoundError 
 
             if getFileSize(fname) == 0:
-                print("File\t{0} \tis empty!  Skipping...".format(fname))
-                continue
-        
-            fin = open(fname, 'rb')  # Open the file
-            Ntrees = np.fromfile(fin,np.dtype(np.int32),1)  # Read number of trees in file
-            NtotGals = np.fromfile(fin,np.dtype(np.int32),1)[0]  # Read number of gals in file.
-            TotNTrees = TotNTrees + Ntrees  # Update total sim trees number
-            TotNGals = TotNGals + NtotGals  # Update total sim gals number
-            goodfiles = goodfiles + 1  # Update number of files read for volume calculation
-            fin.close()
+                print("File\t{0} \tis empty!".format(fname))
+                raise ValueError 
+
+            # We're only reading the header information at the moment.
+            with open(fname, "rb") as fin:
+                Ntrees = np.fromfile(fin,np.dtype(np.int32),1)
+                NtotGals = np.fromfile(fin,np.dtype(np.int32),1)[0]
+                TotNTrees = TotNTrees + Ntrees
+                TotNGals = TotNGals + NtotGals
+                goodfiles += 1
 
         print("")
         print("Input files contain:\t{0} trees ;\t{1} galaxies.".format(TotNTrees, TotNGals))
         print("")
 
-        # Initialize the storage array
         G = np.empty(TotNGals, dtype=Galdesc)
 
-        offset = 0  # Offset index for storage array
+        offset = 0
 
         # Open each file in turn and read in the preamble variables and structure.
         print("Reading in files.")
         for fnr in range(first_file,last_file+1):
-            fname = model_name+'_'+str(fnr)  # Complete filename
+            fname = "{0}_{1}".format(model_name, fnr)
         
             if not os.path.isfile(fname):
-              continue
+                print("Couldn't find file {0}. This should've been caught in "
+                      "the above block".format(fname))
+                raise FileNotFoundError
 
             if getFileSize(fname) == 0:
+                print("File {0} had zero size. This should've been caught in "
+                      "the above block.".format(fname))
                 continue
         
-            fin = open(fname, 'rb')  # Open the file
-            Ntrees = np.fromfile(fin, np.dtype(np.int32), 1)  # Read number of trees in file
-            NtotGals = np.fromfile(fin, np.dtype(np.int32), 1)[0]  # Read number of gals in file.
-            GalsPerTree = np.fromfile(fin, np.dtype((np.int32, Ntrees)),1) # Read the number of gals in each tree
-            print(":   Reading N={0} \tgalaxies from file: {1}".format(NtotGals,fname))
-            GG = np.fromfile(fin, Galdesc, NtotGals)  # Read in the galaxy structures
-        
-            FileIndexRanges.append((offset,offset+NtotGals))
-        
+            fin = open(fname, 'rb')
+
+            with open(fname, "rb") as fin:
+                Ntrees = np.fromfile(fin, np.dtype(np.int32), 1)
+                NtotGals = np.fromfile(fin, np.dtype(np.int32), 1)[0]
+                GalsPerTree = np.fromfile(fin, np.dtype((np.int32, Ntrees)),1)
+
+                print(":   Reading N={0} \tgalaxies from file: {1}".format(NtotGals,fname))
+                GG = np.fromfile(fin, Galdesc, NtotGals)
+
             # Slice the file array into the global array
             # N.B. the copy() part is required otherwise we simply point to
             # the GG data which changes from file to file
@@ -256,28 +308,43 @@ class Model:
             
             del(GG)
             offset = offset + NtotGals  # Update the offset position for the global array
-        
-            fin.close()  # Close the file
-
 
         print("")
-        print("Total galaxies considered:", TotNGals)
+        print("Total galaxies considered: {0}".format(TotNGals))
 
-        # Convert the Galaxy array into a recarray
         G = G.view(np.recarray)
+        self.gals = G
 
         w = np.where(G.StellarMass > 1.0)[0]
         print("Galaxies more massive than 10^10Msun/h: {0}".format(len(w)))
 
         print("")
 
-        # Calculate the volume given the first_file and last_file
+        # Scale the volume depending upon the fraction of files read. 
         self.volume = self.BoxSize**3.0 * goodfiles / self.MaxTreeFiles
-
-        return G
 
 
     def calc_properties(self, plot_toggles):
+        """
+        Calculates the properties for the galaxies of a model. Depending upon
+        which plots are being generated, the exact properties calculated will
+        change. 
+
+        ..note:: Refer to the class-level documentation for a full list of the
+                 properties calculated and their associated units.
+
+        Parameters 
+        ----------
+
+        plot_toggles : Dictionary 
+            Specifies which plots are being generated. Used to determine which
+            properties are needed.
+
+        Returns
+        -------
+
+        None.
+        """
 
         G = self.gals
 
@@ -287,8 +354,8 @@ class Model:
             sSFR = (G.SfrDisk[non_zero_stellar] + G.SfrBulge[non_zero_stellar]) / \
                    (G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
 
-            self.stellar_mass = stellar_mass 
-            self.sSFR = sSFR
+            self.stellar_mass = stellar_mass  # 1.0e10 Msun. 
+            self.sSFR = sSFR  # Unitless.
 
         if plot_toggles["BMF"]:
             non_zero_baryon = np.where(G.StellarMass + G.ColdGas > 0.0)[0]
@@ -296,14 +363,14 @@ class Model:
                                     G.ColdGas[non_zero_baryon]) * 1.0e10 \
                                     / self.Hubble_h)
 
-            self.baryon_mass = baryon_mass
+            self.baryon_mass = baryon_mass  # 1.0e10 Msun.
 
         return
 
 
 class Results:
     """
-    Handles all of the plotting of the models.
+    Handles the plotting of the models.
 
     Attributes
     ----------
@@ -319,7 +386,7 @@ class Results:
         plotting, otherwise it will be skipped.
     """
 
-    def __init__(self, all_models_dict, plot_toggles):
+    def __init__(self, all_models_dict=None, plot_toggles=None):
         """
         Initialises the individual ``Model`` class instances and adds them to
         the ``Results`` class instance.
@@ -330,11 +397,17 @@ class Results:
         all_models_dict : Dictionary 
             Dictionary containing the parameter values for each ``Model``
             instance. Refer to the ``Model`` class for full details on this
-            dictionary.
+            dictionary. Each field of this dictionary must have length equal to
+            the number of models we're plotting.
 
         plot_toggles : Dictionary
             Specifies which plots will be generated. An entry of 1 denotes
             plotting, otherwise it will be skipped.
+
+        Returns
+        -------
+
+        None.
         """
 
         self.num_models = len(all_models_dict["model_path"])
@@ -351,22 +424,15 @@ class Results:
 
                 model_dict[field] = all_models_dict[field][model_num]
 
-            # Instantiate a Model using these properties.
             model = Model(model_dict)
-
-            # Cosmology depends upon the simulation specified.
             model.set_cosmology(model_dict["simulation"])
+            model.read_gals(model_dict["model_path"],
+                            model_dict["first_file"],
+                            model_dict["last_file"])
 
-            # Read in the galaxies from the provided path.
-            model.gals = model.read_gals(model_dict["model_path"],
-                                         model_dict["first_file"],
-                                         model_dict["last_file"])
-
-            # Then calculate mass/SFR/etc of these galaxies. Properties
-            # calculated depends upon the plots we're making.
+            # Properties calculated depends upon the plots we're making.
             model.calc_properties(plot_toggles) 
 
-            # Append to the global list.
             all_models.append(model)
 
         self.models = all_models
@@ -381,11 +447,17 @@ class Results:
         ----------
 
         None
+
+        Returns 
+        -------
+
+        None. The plots are saved individually by each method.
         """
 
         plot_toggles = self.plot_toggles
 
         # Depending upon the toggles, make the plots.
+
         if plot_toggles["SMF"] == 1:
             print("Plotting the Stellar Mass Function.")
             self.StellarMassFunction()
