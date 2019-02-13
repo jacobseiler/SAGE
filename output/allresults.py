@@ -9,6 +9,8 @@ import pylab as plt
 from random import sample, seed
 from os.path import getsize as getFileSize
 
+import observations as obs
+
 # ================================================================================
 # Basic variables
 # ================================================================================
@@ -33,8 +35,6 @@ OutputDir = '' # set in main below
 
 OutputFormat = '.png'
 TRANSPARENT = False
-
-OutputList = []
 
 
 class Model:
@@ -79,7 +79,7 @@ class Model:
     line_style : string
         Line style used for this model
 
-    Hubble_h : float
+    hubble_h : float
         Hubble 'little h' value. Between 0 and 1.
 
     BoxSize : float
@@ -94,12 +94,24 @@ class Model:
     mass : List of floats, length is number of galaxies
         Mass of each galaxy. 1.0e10 Msun.
 
-    sSFR : List of floats, length is number of galaxies
-        Specific star formation rate of each galaxy
+    stellar_sSFR : List of floats, length is number of galaxies with non-zero
+                   stellar mass
+        Specific star formation rate of those galaxies with a non-zero stellar
+        mass. 
 
-    baryon_mass : list of floats, length is number of galaxies
+    baryon_mass : list of floats, length is number of galaxies with non-zero
+                  stellar mass or cold gas
         Mass of the baryons (stellar mass + cold gas) of each galaxy. 1.0e10
         Msun.
+
+    cold_mass : list of floats, length is the number of galaxies with non-zero
+                cold gas.
+        Mass of the cold gas within each galaxy. 1.0e10 Msun.
+
+    cold_sSFR : List of floats, length is number of galaxies with non-zero cold
+                gas mass
+        Specific star formation rate of those galaxies with a non-zero cold gas 
+        mass. 
     """
 
     def __init__(self, model_dict):
@@ -135,11 +147,12 @@ class Model:
         Parameters 
         ----------
 
-        simulation : {0, 1, 2}
+        simulation : {0, 1, 2, 3}
             Flags which simulation we are using.
             0: Mini-Millennium,
             1: Full Millennium,
-            2: Kali (512^3 particles).
+            2: Kali (512^3 particles),
+            3: Genesis (L = 500 Mpc/h, N = 2400^3).
 
         Returns
         -------
@@ -148,19 +161,24 @@ class Model:
         """
 
         if simulation == 0:    # Mini-Millennium
-          self.Hubble_h = 0.73 
-          self.BoxSize = 62.5
-          self.MaxTreeFiles = 8
+            self.hubble_h = 0.73 
+            self.BoxSize = 62.5
+            self.MaxTreeFiles = 8
 
         elif simulation == 1:  # Full Millennium
-          self.Hubble_h = 0.73
-          self.BoxSize = 500
-          self.MaxTreeFiles = 512
+            self.hubble_h = 0.73
+            self.BoxSize = 500
+            self.MaxTreeFiles = 512
 
         elif simulation == 2: # Kali 512
-          self.Hubble_h = 0.681
-          self.BoxSize = 108.96
-          self.MaxTreeFiles = 8
+            self.hubble_h = 0.681
+            self.BoxSize = 108.96
+            self.MaxTreeFiles = 8
+
+        elif simulation == 3:            
+            self.hubble_h = 0.6751
+            self.BoxSize = 500.00 
+            self.MaxTreeFiles = 125
 
         else:
           print("Please pick a valid simulation!")
@@ -350,20 +368,29 @@ class Model:
 
         if plot_toggles["SMF"]:
             non_zero_stellar = np.where(G.StellarMass > 0.0)[0]
-            stellar_mass = np.log10(G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
-            sSFR = (G.SfrDisk[non_zero_stellar] + G.SfrBulge[non_zero_stellar]) / \
-                   (G.StellarMass[non_zero_stellar] * 1.0e10 / self.Hubble_h)
+            stellar_mass = np.log10(G.StellarMass[non_zero_stellar] * 1.0e10 / self.hubble_h)
+            stellar_sSFR = (G.SfrDisk[non_zero_stellar] + G.SfrBulge[non_zero_stellar]) / \
+                           (G.StellarMass[non_zero_stellar] * 1.0e10 / self.hubble_h)
 
             self.stellar_mass = stellar_mass  # 1.0e10 Msun. 
-            self.sSFR = sSFR  # Unitless.
+            self.stellar_sSFR = stellar_sSFR  # Unitless.
 
         if plot_toggles["BMF"]:
             non_zero_baryon = np.where(G.StellarMass + G.ColdGas > 0.0)[0]
             baryon_mass = np.log10((G.StellarMass[non_zero_baryon] + \
                                     G.ColdGas[non_zero_baryon]) * 1.0e10 \
-                                    / self.Hubble_h)
+                                    / self.hubble_h)
 
             self.baryon_mass = baryon_mass  # 1.0e10 Msun.
+
+        if plot_toggles["GMF"]:
+            non_zero_cold = np.where(G.ColdGas > 0.0)[0]
+            cold_mass = np.log10(G.ColdGas[non_zero_cold] * 1.0e10 / self.hubble_h)
+            cold_sSFR = (G.SfrDisk[non_zero_cold] + G.SfrBulge[non_zero_cold]) / \
+                        (G.StellarMass[non_zero_cold] * 1.0e10 / self.hubble_h)
+
+            self.cold_mass = cold_mass
+            self.cold_sSFR = cold_sSFR
 
         return
 
@@ -465,7 +492,10 @@ class Results:
         if plot_toggles["BMF"] == 1:
             print("Plotting the Baryon Mass Function.")
             self.BaryonicMassFunction()
-        #res.GasMassFunction(model.gals)
+
+        if plot_toggles["GMF"] == 1:
+            print("Plotting the Cold Gas Mass Function.")
+            self.GasMassFunction()
         #res.BaryonicTullyFisher(model.gals)
         #res.SpecificStarFormationRate(model.gals)
         #res.GasFraction(model.gals)
@@ -483,98 +513,6 @@ class Results:
 
     def StellarMassFunction(self):
 
-        def plot_SMF_data(ax, hubble_h, IMF):
-
-            # Baldry+ 2008 modified data used for the MCMC fitting
-            Baldry = np.array([
-                [7.05, 1.3531e-01, 6.0741e-02],
-                [7.15, 1.3474e-01, 6.0109e-02],
-                [7.25, 2.0971e-01, 7.7965e-02],
-                [7.35, 1.7161e-01, 3.1841e-02],
-                [7.45, 2.1648e-01, 5.7832e-02],
-                [7.55, 2.1645e-01, 3.9988e-02],
-                [7.65, 2.0837e-01, 4.8713e-02],
-                [7.75, 2.0402e-01, 7.0061e-02],
-                [7.85, 1.5536e-01, 3.9182e-02],
-                [7.95, 1.5232e-01, 2.6824e-02],
-                [8.05, 1.5067e-01, 4.8824e-02],
-                [8.15, 1.3032e-01, 2.1892e-02],
-                [8.25, 1.2545e-01, 3.5526e-02],
-                [8.35, 9.8472e-02, 2.7181e-02],
-                [8.45, 8.7194e-02, 2.8345e-02],
-                [8.55, 7.0758e-02, 2.0808e-02],
-                [8.65, 5.8190e-02, 1.3359e-02],
-                [8.75, 5.6057e-02, 1.3512e-02],
-                [8.85, 5.1380e-02, 1.2815e-02],
-                [8.95, 4.4206e-02, 9.6866e-03],
-                [9.05, 4.1149e-02, 1.0169e-02],
-                [9.15, 3.4959e-02, 6.7898e-03],
-                [9.25, 3.3111e-02, 8.3704e-03],
-                [9.35, 3.0138e-02, 4.7741e-03],
-                [9.45, 2.6692e-02, 5.5029e-03],
-                [9.55, 2.4656e-02, 4.4359e-03],
-                [9.65, 2.2885e-02, 3.7915e-03],
-                [9.75, 2.1849e-02, 3.9812e-03],
-                [9.85, 2.0383e-02, 3.2930e-03],
-                [9.95, 1.9929e-02, 2.9370e-03],
-                [10.05, 1.8865e-02, 2.4624e-03],
-                [10.15, 1.8136e-02, 2.5208e-03],
-                [10.25, 1.7657e-02, 2.4217e-03],
-                [10.35, 1.6616e-02, 2.2784e-03],
-                [10.45, 1.6114e-02, 2.1783e-03],
-                [10.55, 1.4366e-02, 1.8819e-03],
-                [10.65, 1.2588e-02, 1.8249e-03],
-                [10.75, 1.1372e-02, 1.4436e-03],
-                [10.85, 9.1213e-03, 1.5816e-03],
-                [10.95, 6.1125e-03, 9.6735e-04],
-                [11.05, 4.3923e-03, 9.6254e-04],
-                [11.15, 2.5463e-03, 5.0038e-04],
-                [11.25, 1.4298e-03, 4.2816e-04],
-                [11.35, 6.4867e-04, 1.6439e-04],
-                [11.45, 2.8294e-04, 9.9799e-05],
-                [11.55, 1.0617e-04, 4.9085e-05],
-                [11.65, 3.2702e-05, 2.4546e-05],
-                [11.75, 1.2571e-05, 1.2571e-05],
-                [11.85, 8.4589e-06, 8.4589e-06],
-                [11.95, 7.4764e-06, 7.4764e-06],
-                ], dtype=np.float32)
-
-            Baldry_xval = np.log10(10 ** Baldry[:, 0] / hubble_h / hubble_h)
-            if(IMF == 1):
-                Baldry_xval = Baldry_xval - 0.26  # convert back to Chabrier IMF
-
-            Baldry_yvalU = (Baldry[:, 1]+Baldry[:, 2]) * pow(hubble_h, 3)
-            Baldry_yvalL = (Baldry[:, 1]-Baldry[:, 2]) * pow(hubble_h, 3) 
-
-            ax.fill_between(Baldry_xval, Baldry_yvalU, Baldry_yvalL,
-                            facecolor='purple', alpha=0.25,
-                            label='Baldry et al. 2008 (z=0.1)')
-
-            # This next line is just to get the shaded region to appear correctly in the legend
-            ax.plot(np.nan, np.nan, label='Baldry et al. 2008', color='purple', alpha=0.3)
-
-            # Finally plot the data
-            # plt.errorbar(
-            #     Baldry[:, 0],
-            #     Baldry[:, 1],
-            #     yerr=Baldry[:, 2],
-            #     color='g',
-            #     linestyle=':',
-            #     lw = 1.5,
-            #     label='Baldry et al. 2008',
-            #     )
-
-            # # Cole et al. 2001 SMF (h=1.0 converted to h=0.73)
-            # M = np.arange(7.0, 13.0, 0.01)
-            # Mstar = np.log10(7.07*1.0e10 /model.Hubble_h/model.Hubble_h)
-            # alpha = -1.18
-            # phistar = 0.009 *model.Hubble_h*model.Hubble_h*model.Hubble_h
-            # xval = 10.0 ** (M-Mstar)
-            # yval = np.log(10.) * phistar * xval ** (alpha+1) * np.exp(-xval)      
-            # plt.plot(M, yval, 'g--', lw=1.5, label='Cole et al. 2001')  # Plot the SMF
-
-            return ax
-
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
@@ -583,17 +521,17 @@ class Results:
         # For scaling the observational data, we use the values of the zeroth
         # model. We also save the plots into the output directory of the zeroth
         # model. 
-        zeroth_hubble_h = (self.models)[0].Hubble_h
+        zeroth_hubble_h = (self.models)[0].hubble_h
         zeroth_IMF = (self.models)[0].IMF
         zeroth_output_path = (self.models)[0].output_path
 
-        ax = plot_SMF_data(ax, zeroth_hubble_h, zeroth_IMF) 
+        ax = obs.plot_smf_data(ax, zeroth_hubble_h, zeroth_IMF) 
 
         # Go through each of the models and plot. 
         for model in self.models:
 
             stellar_mass = model.stellar_mass
-            sSFR = model.sSFR
+            stellar_sSFR = model.stellar_sSFR
             tag = model.tag
 
             # If we only have one model, we will split it into red and blue
@@ -616,71 +554,73 @@ class Results:
             xaxeshisto = binedges[:-1] + 0.5 * binwidth
             
             # If we're plotting one model, calculate red and blue populations.
-            if len(self.models) > 1: 
-                w = np.where(sSFR < 10.0**sSFRcut)[0]
+            if self.num_models > 1: 
+                w = np.where(stellar_sSFR < 10.0**sSFRcut)[0]
                 massRED = stellar_mass[w]
                 (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
 
-                w = np.where(sSFR > 10.0**sSFRcut)[0]
+                w = np.where(stellar_sSFR > 10.0**sSFRcut)[0]
                 massBLU = stellar_mass[w]
                 (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
                     
-            # Overplot the model histograms
-            ax.plot(xaxeshisto, counts / model.volume *model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth,
+            # The SMF is normalized by the simulation volume which is in Mpc/h. 
+            ax.plot(xaxeshisto, counts/model.volume*pow(model.hubble_h, 3)/binwidth,
                     color=color, ls=ls, label=tag + " - All")
 
             # If we only have one model, plot the sub-populations.
-            if len(self.models) == 1:
-                ax.plot(xaxeshisto, countsRED / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth,
+            if self.num_models == 1:
+                ax.plot(xaxeshisto, countsRED / model.volume * model.hubble_h*model.hubble_h*model.hubble_h / binwidth,
                         'r:', lw=2, label=tag + " - Red")
-                ax.plot(xaxeshisto, countsBLU / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth,
+                ax.plot(xaxeshisto, countsBLU / model.volume * model.hubble_h*model.hubble_h*model.hubble_h / binwidth,
                         'b:', lw=2, label=tag + " - Blue")
 
         ax.set_yscale('log', nonposy='clip')
         ax.set_xlim([8.0, 12.5])
         ax.set_ylim([1.0e-6, 1.0e-1])
 
-        # Set the x-axis minor ticks
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
 
-        ax.set_ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')  # Set the y...
-        ax.set_xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
+        ax.set_ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')
+        ax.set_xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
 
         ax.text(12.2, 0.03, model.simulation, size = 'large')
 
         leg = ax.legend(loc='lower left', numpoints=1,
                         labelspacing=0.1)
-        leg.draw_frame(False)  # Don't want a box frame
-        for t in leg.get_texts():  # Reduce the size of the text
+        leg.draw_frame(False)
+        for t in leg.get_texts():
             t.set_fontsize('medium')
 
         outputFile = "{0}/1.StellarMassFunction{1}".format(zeroth_output_path,
                                                            OutputFormat)
-        fig.savefig(outputFile)  # Save the figure
+        fig.savefig(outputFile)
         print("Saved file to {0}".format(outputFile))
         plt.close()
-
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
 
 # ---------------------------------------------------------
 
     def BaryonicMassFunction(self):
 
-        print("Plotting the baryonic mass function")
-
-        plt.figure()  # New figure
-        ax = plt.subplot(111)  # 1 plot on the figure
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
 
         binwidth = 0.1  # mass function histogram bin width
 
+        # For scaling the observational data, we use the values of the zeroth
+        # model. We also save the plots into the output directory of the zeroth
+        # model. 
+        zeroth_hubble_h = (self.models)[0].hubble_h
+        zeroth_IMF = (self.models)[0].IMF
         zeroth_output_path = (self.models)[0].output_path
+
+        ax = obs.plot_bmf_data(ax, zeroth_hubble_h, zeroth_IMF) 
 
         for model in self.models:
 
             baryon_mass = model.baryon_mass
             tag = model.tag
+            color = model.line_color
+            ls = model.line_style
 
             mi = np.floor(min(baryon_mass)) - 2
             ma = np.floor(max(baryon_mass)) + 2
@@ -691,177 +631,86 @@ class Results:
             # Set the x-axis values to be the centre of the bins
             xaxeshisto = binedges[:-1] + 0.5 * binwidth
 
-            '''
-            # Bell et al. 2003 BMF (h=1.0 converted to h=0.73)
-            M = np.arange(7.0, 13.0, 0.01)
-            Mstar = np.log10(5.3*1.0e10 /self.Hubble_h/self.Hubble_h)
-            alpha = -1.21
-            phistar = 0.0108 *self.Hubble_h*self.Hubble_h*self.Hubble_h
-            xval = 10.0 ** (M-Mstar)
-            yval = np.log(10.) * phistar * xval ** (alpha+1) * np.exp(-xval)
-            
-            if(whichimf == 0):
-                # converted diet Salpeter IMF to Salpeter IMF
-                plt.plot(np.log10(10.0**M /0.7), yval, 'b-', lw=2.0, label='Bell et al. 2003')  # Plot the SMF
-            elif(whichimf == 1):
-                # converted diet Salpeter IMF to Salpeter IMF, then to Chabrier IMF
-                plt.plot(np.log10(10.0**M /0.7 /1.8), yval, 'g--', lw=1.5, label='Bell et al. 2003')  # Plot the SMF
-            '''
-            # Overplot the model histograms
-            plt.plot(xaxeshisto, counts / model.volume * model.Hubble_h*model.Hubble_h*model.Hubble_h / binwidth, 'k-', label=tag)
+            # The BMF is normalized by the simulation volume which is in Mpc/h. 
+            ax.plot(xaxeshisto, counts/model.volume*model.hubble_h/binwidth,
+                    color=color, ls=ls, label=tag)
 
-        plt.yscale('log', nonposy='clip')
-        plt.axis([8.0, 12.5, 1.0e-6, 1.0e-1])
+        ax.set_yscale('log', nonposy='clip')
+        ax.set_xlim([8.0, 12.5])
+        ax.set_ylim([1.0e-6, 1.0e-1])
 
-        # Set the x-axis minor ticks
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
 
-        plt.ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')  # Set the y...
-        plt.xlabel(r'$\log_{10}\ M_{\mathrm{bar}}\ (M_{\odot})$')  # and the x-axis labels
+        ax.set_ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')
+        ax.set_xlabel(r'$\log_{10}\ M_{\mathrm{bar}}\ (M_{\odot})$')
 
-        leg = plt.legend(loc='lower left', numpoints=1,
-                         labelspacing=0.1)
-        leg.draw_frame(False)  # Don't want a box frame
-        for t in leg.get_texts():  # Reduce the size of the text
+        leg = ax.legend(loc='lower left', numpoints=1,
+                        labelspacing=0.1)
+        leg.draw_frame(False)
+        for t in leg.get_texts():
             t.set_fontsize('medium')
 
         outputFile = "{0}/2.BaryonicMassFunction{1}".format(zeroth_output_path, OutputFormat) 
-        plt.savefig(outputFile)  # Save the figure
+        fig.savefig(outputFile)
         print("Saved file to {0}".format(outputFile))
         plt.close()
-
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
 
 # ---------------------------------------------------------
    
-    def GasMassFunction(self, G):
+    def GasMassFunction(self):
 
-        print("Plotting the cold gas mass function")
-
-        plt.figure()  # New figure
-        ax = plt.subplot(111)  # 1 plot on the figure
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
 
         binwidth = 0.1  # mass function histogram bin width
 
-        # calculate all
-        w = np.where(G.ColdGas > 0.0)[0]
-        mass = np.log10(G.ColdGas[w] * 1.0e10 / self.Hubble_h)
-        sSFR = (G.SfrDisk[w] + G.SfrBulge[w]) / (G.StellarMass[w] * 1.0e10 / self.Hubble_h)
-        mi = np.floor(min(mass)) - 2
-        ma = np.floor(max(mass)) + 2
-        NB = (ma - mi) / binwidth
+        # For scaling the observational data, we use the values of the zeroth
+        # model. We also save the plots into the output directory of the zeroth
+        # model. 
+        zeroth_hubble_h = (self.models)[0].hubble_h
+        zeroth_output_path = (self.models)[0].output_path
 
-        (counts, binedges) = np.histogram(mass, range=(mi, ma), bins=NB)
+        obs.plot_gmf_data(ax, zeroth_hubble_h)
 
-        # Set the x-axis values to be the centre of the bins
-        xaxeshisto = binedges[:-1] + 0.5 * binwidth
-        
-        # additionally calculate red
-        w = np.where(sSFR < 10.0**sSFRcut)[0]
-        massRED = mass[w]
-        (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
+        for model in self.models:
 
-        # additionally calculate blue
-        w = np.where(sSFR > 10.0**sSFRcut)[0]
-        massBLU = mass[w]
-        (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
+            cold_mass = model.cold_mass
+            tag = model.tag
+            color = model.line_color
+            ls = model.line_style
 
-        # Baldry+ 2008 modified data used for the MCMC fitting
-        Zwaan = np.array([[6.933,   -0.333],
-            [7.057,   -0.490],
-            [7.209,   -0.698],
-            [7.365,   -0.667],
-            [7.528,   -0.823],
-            [7.647,   -0.958],
-            [7.809,   -0.917],
-            [7.971,   -0.948],
-            [8.112,   -0.927],
-            [8.263,   -0.917],
-            [8.404,   -1.062],
-            [8.566,   -1.177],
-            [8.707,   -1.177],
-            [8.853,   -1.312],
-            [9.010,   -1.344],
-            [9.161,   -1.448],
-            [9.302,   -1.604],
-            [9.448,   -1.792],
-            [9.599,   -2.021],
-            [9.740,   -2.406],
-            [9.897,   -2.615],
-            [10.053,  -3.031],
-            [10.178,  -3.677],
-            [10.335,  -4.448],
-            [10.492,  -5.083]        ], dtype=np.float32)
-        
-        ObrRaw = np.array([
-            [7.300,   -1.104],
-            [7.576,   -1.302],
-            [7.847,   -1.250],
-            [8.133,   -1.240],
-            [8.409,   -1.344],
-            [8.691,   -1.479],
-            [8.956,   -1.792],
-            [9.231,   -2.271],
-            [9.507,   -3.198],
-            [9.788,   -5.062 ]        ], dtype=np.float32)
+            mi = np.floor(min(cold_mass)) - 2
+            ma = np.floor(max(cold_mass)) + 2
+            NB = int((ma - mi) / binwidth)
 
-        ObrCold = np.array([
-            [8.009,   -1.042],
-            [8.215,   -1.156],
-            [8.409,   -0.990],
-            [8.604,   -1.156],
-            [8.799,   -1.208],
-            [9.020,   -1.333],
-            [9.194,   -1.385],
-            [9.404,   -1.552],
-            [9.599,   -1.677],
-            [9.788,   -1.812],
-            [9.999,   -2.312],
-            [10.172,  -2.656],
-            [10.362,  -3.500],
-            [10.551,  -3.635],
-            [10.740,  -5.010]        ], dtype=np.float32)
+            (counts, binedges) = np.histogram(cold_mass, range=(mi, ma), bins=NB)
 
-        ObrCold_xval = np.log10(10**(ObrCold[:, 0])  /self.Hubble_h/self.Hubble_h)
-        ObrCold_yval = (10**(ObrCold[:, 1]) * self.Hubble_h*self.Hubble_h*self.Hubble_h)
-        Zwaan_xval = np.log10(10**(Zwaan[:, 0]) /self.Hubble_h/self.Hubble_h)
-        Zwaan_yval = (10**(Zwaan[:, 1]) * self.Hubble_h*self.Hubble_h*self.Hubble_h)
-        ObrRaw_xval = np.log10(10**(ObrRaw[:, 0])  /self.Hubble_h/self.Hubble_h)
-        ObrRaw_yval = (10**(ObrRaw[:, 1]) * self.Hubble_h*self.Hubble_h*self.Hubble_h)
+            # Set the x-axis values to be the centre of the bins
+            xaxeshisto = binedges[:-1] + 0.5 * binwidth
 
-        plt.plot(ObrCold_xval, ObrCold_yval, color='black', lw = 7, alpha=0.25, label='Obr. \& Raw. 2009 (Cold Gas)')
-        plt.plot(Zwaan_xval, Zwaan_yval, color='cyan', lw = 7, alpha=0.25, label='Zwaan et al. 2005 (HI)')
-        plt.plot(ObrRaw_xval, ObrRaw_yval, color='magenta', lw = 7, alpha=0.25, label='Obr. \& Raw. 2009 (H2)')
+            # The MF is normalized by the simulation volume which is in Mpc/h. 
+            ax.plot(xaxeshisto, counts/model.volume*pow(model.hubble_h,3)/binwidth,
+                    color=color, ls=ls, label=tag + '- Cold Gas')
 
-        
-        # Overplot the model histograms
-        plt.plot(xaxeshisto, counts    / self.volume * self.Hubble_h*self.Hubble_h*self.Hubble_h / binwidth, 'k-', label='Model - Cold Gas')
+        ax.set_yscale('log', nonposy='clip')
+        ax.set_xlim([8.0, 11.5])
+        ax.set_ylim([1.0e-6, 1.0e-1])
 
-        plt.yscale('log', nonposy='clip')
-        plt.axis([8.0, 11.5, 1.0e-6, 1.0e-1])
-
-        # Set the x-axis minor ticks
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.1))
 
-        plt.ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')  # Set the y...
-        plt.xlabel(r'$\log_{10} M_{\mathrm{X}}\ (M_{\odot})$')  # and the x-axis labels
+        ax.set_ylabel(r'$\phi\ (\mathrm{Mpc}^{-3}\ \mathrm{dex}^{-1})$')
+        ax.set_xlabel(r'$\log_{10} M_{\mathrm{X}}\ (M_{\odot})$')
 
-        leg = plt.legend(loc='lower left', numpoints=1,
+        leg = ax.legend(loc='lower left', numpoints=1,
                          labelspacing=0.1)
-        leg.draw_frame(False)  # Don't want a box frame
-        for t in leg.get_texts():  # Reduce the size of the text
+        leg.draw_frame(False)
+        for t in leg.get_texts():
             t.set_fontsize('medium')
 
-        outputFile = OutputDir + '3.GasMassFunction' + OutputFormat
-        plt.savefig(outputFile)  # Save the figure
+        outputFile = "{0}/3.GasMassFunction{1}".format(zeroth_output_path, OutputFormat) 
+        fig.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
-
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
 
 # ---------------------------------------------------------
     
@@ -879,7 +728,7 @@ class Results:
           (G.BulgeMass / G.StellarMass > 0.1) & (G.BulgeMass / G.StellarMass < 0.5))[0]
         if(len(w) > dilute): w = sample(w, dilute)
     
-        mass = np.log10((G.StellarMass[w] + G.ColdGas[w]) * 1.0e10 / self.Hubble_h)
+        mass = np.log10((G.StellarMass[w] + G.ColdGas[w]) * 1.0e10 / self.hubble_h)
         vel = np.log10(G.Vmax[w])
                     
         plt.scatter(vel, mass, marker='o', s=1, c='k', alpha=0.5, label='Model Sb/c galaxies')
@@ -908,10 +757,6 @@ class Results:
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
-
 # ---------------------------------------------------------
     
     def SpecificStarFormationRate(self, G):
@@ -926,8 +771,8 @@ class Results:
         w = np.where(G.StellarMass > 0.01)[0]
         if(len(w) > dilute): w = sample(w, dilute)
         
-        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.Hubble_h)
-        sSFR = np.log10( (G.SfrDisk[w] + G.SfrBulge[w]) / (G.StellarMass[w] * 1.0e10 / self.Hubble_h) )
+        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.hubble_h)
+        sSFR = np.log10( (G.SfrDisk[w] + G.SfrBulge[w]) / (G.StellarMass[w] * 1.0e10 / self.hubble_h) )
         plt.scatter(mass, sSFR, marker='o', s=1, c='k', alpha=0.5, label='Model galaxies')
                 
         # overplot dividing line between SF and passive
@@ -953,10 +798,6 @@ class Results:
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
-
 # ---------------------------------------------------------
 
     def GasFraction(self, G):
@@ -972,7 +813,7 @@ class Results:
           (G.BulgeMass / G.StellarMass > 0.1) & (G.BulgeMass / G.StellarMass < 0.5))[0]
         if(len(w) > dilute): w = sample(w, dilute)
         
-        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.Hubble_h)
+        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.hubble_h)
         fraction = G.ColdGas[w] / (G.StellarMass[w] + G.ColdGas[w])
                     
         plt.scatter(mass, fraction, marker='o', s=1, c='k', alpha=0.5, label='Model Sb/c galaxies')
@@ -996,10 +837,6 @@ class Results:
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
-
 # ---------------------------------------------------------
 
     def Metallicity(self, G):
@@ -1014,7 +851,7 @@ class Results:
         w = np.where((G.Type == 0) & (G.ColdGas / (G.StellarMass + G.ColdGas) > 0.1) & (G.StellarMass > 0.01))[0]
         if(len(w) > dilute): w = sample(w, dilute)
         
-        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.Hubble_h)
+        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.hubble_h)
         Z = np.log10((G.MetalsColdGas[w] / G.ColdGas[w]) / 0.02) + 9.0
                     
         plt.scatter(mass, Z, marker='o', s=1, c='k', alpha=0.5, label='Model galaxies')
@@ -1048,10 +885,6 @@ class Results:
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-    
-
 # ---------------------------------------------------------
 
     def BlackHoleBulgeRelationship(self, G):
@@ -1066,8 +899,8 @@ class Results:
         w = np.where((G.BulgeMass > 0.01) & (G.BlackHoleMass > 0.00001))[0]
         if(len(w) > dilute): w = sample(w, dilute)
     
-        bh = np.log10(G.BlackHoleMass[w] * 1.0e10 / self.Hubble_h)
-        bulge = np.log10(G.BulgeMass[w] * 1.0e10 / self.Hubble_h)
+        bh = np.log10(G.BlackHoleMass[w] * 1.0e10 / self.hubble_h)
+        bulge = np.log10(G.BulgeMass[w] * 1.0e10 / self.hubble_h)
                     
         plt.scatter(bulge, bh, marker='o', s=1, c='k', alpha=0.5, label='Model galaxies')
                 
@@ -1095,10 +928,6 @@ class Results:
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
-
 # ---------------------------------------------------------
     
     def QuiescentFraction(self, G):
@@ -1113,10 +942,10 @@ class Results:
         groupscale = 12.5
         
         w = np.where(G.StellarMass > 0.0)[0]
-        StellarMass = np.log10(G.StellarMass[w] * 1.0e10 / self.Hubble_h)
-        CentralMvir = np.log10(G.CentralMvir[w] * 1.0e10 / self.Hubble_h)
+        StellarMass = np.log10(G.StellarMass[w] * 1.0e10 / self.hubble_h)
+        CentralMvir = np.log10(G.CentralMvir[w] * 1.0e10 / self.hubble_h)
         Type = G.Type[w]
-        sSFR = (G.SfrDisk[w] + G.SfrBulge[w]) / (G.StellarMass[w] * 1.0e10 / self.Hubble_h)
+        sSFR = (G.SfrDisk[w] + G.SfrBulge[w]) / (G.StellarMass[w] * 1.0e10 / self.hubble_h)
 
         MinRange = 9.5
         MaxRange = 12.0
@@ -1203,10 +1032,6 @@ class Results:
         plt.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
-            
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
 
 # --------------------------------------------------------
 
@@ -1218,8 +1043,8 @@ class Results:
 
         fBulge = G.BulgeMass / G.StellarMass
         fDisk = 1.0 - (G.BulgeMass) / G.StellarMass
-        mass = np.log10(G.StellarMass * 1.0e10 / self.Hubble_h)
-        sSFR = np.log10((G.SfrDisk + G.SfrBulge) / (G.StellarMass * 1.0e10 / self.Hubble_h))
+        mass = np.log10(G.StellarMass * 1.0e10 / self.hubble_h)
+        sSFR = np.log10((G.SfrDisk + G.SfrBulge) / (G.StellarMass * 1.0e10 / self.hubble_h))
         
         binwidth = 0.2
         shift = binwidth/2.0
@@ -1269,10 +1094,6 @@ class Results:
         print("Saved file to {0}".format(outputFile))
         plt.close()
 
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
-
 # ---------------------------------------------------------
     
     def BaryonFraction(self, G):
@@ -1284,7 +1105,7 @@ class Results:
         plt.figure()  # New figure
         ax = plt.subplot(111)  # 1 plot on the figure
         
-        HaloMass = np.log10(G.Mvir * 1.0e10 / self.Hubble_h)
+        HaloMass = np.log10(G.Mvir * 1.0e10 / self.hubble_h)
         Baryons = G.StellarMass + G.ColdGas + G.HotGas + G.EjectedMass + G.IntraClusterStars + G.BlackHoleMass
 
         MinHalo = 11.0
@@ -1329,7 +1150,7 @@ class Results:
                     
                     if CentralAndSatellitesFound > 0:
                         BaryonFraction.append(sum(Baryons[w2]) / G.Mvir[w1[j]])
-                        CentralHaloMass.append(np.log10(G.Mvir[w1[j]] * 1.0e10 / self.Hubble_h))
+                        CentralHaloMass.append(np.log10(G.Mvir[w1[j]] * 1.0e10 / self.hubble_h))
 
                         Stars.append(sum(G.StellarMass[w2]) / G.Mvir[w1[j]])
                         Cold.append(sum(G.ColdGas[w2]) / G.Mvir[w1[j]])
@@ -1382,10 +1203,6 @@ class Results:
         plt.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
-            
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
 
 # --------------------------------------------------------
 
@@ -1423,10 +1240,6 @@ class Results:
         print("Saved file to {0}".format(outputFile))
         plt.close()
 
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
-
 # --------------------------------------------------------
 
     def VelocityDistribution(self, G):
@@ -1444,9 +1257,9 @@ class Results:
         plt.figure()
         ax = plt.subplot(111)
 
-        pos_x = G.Pos[:,0] / self.Hubble_h
-        pos_y = G.Pos[:,1] / self.Hubble_h
-        pos_z = G.Pos[:,2] / self.Hubble_h
+        pos_x = G.Pos[:,0] / self.hubble_h
+        pos_y = G.Pos[:,1] / self.hubble_h
+        pos_z = G.Pos[:,2] / self.hubble_h
 
         vel_x = G.Vel[:,0]
         vel_y = G.Vel[:,1]
@@ -1454,24 +1267,24 @@ class Results:
 
         dist_los = np.sqrt(pos_x*pos_x + pos_y*pos_y + pos_z*pos_z)
         vel_los = (pos_x/dist_los)*vel_x + (pos_y/dist_los)*vel_y + (pos_z/dist_los)*vel_z
-        dist_red = dist_los + vel_los/(self.Hubble_h*100.0)
+        dist_red = dist_los + vel_los/(self.hubble_h*100.0)
 
         tot_gals = len(pos_x)
 
 
-        (counts, binedges) = np.histogram(vel_los/(self.Hubble_h*100.0), range=(mi, ma), bins=NB)
+        (counts, binedges) = np.histogram(vel_los/(self.hubble_h*100.0), range=(mi, ma), bins=NB)
         xaxeshisto = binedges[:-1] + 0.5 * binwidth
         plt.plot(xaxeshisto, counts / binwidth / tot_gals, 'k-', label='los-velocity')
 
-        (counts, binedges) = np.histogram(vel_x/(self.Hubble_h*100.0), range=(mi, ma), bins=NB)
+        (counts, binedges) = np.histogram(vel_x/(self.hubble_h*100.0), range=(mi, ma), bins=NB)
         xaxeshisto = binedges[:-1] + 0.5 * binwidth
         plt.plot(xaxeshisto, counts / binwidth / tot_gals, 'r-', label='x-velocity')
 
-        (counts, binedges) = np.histogram(vel_y/(self.Hubble_h*100.0), range=(mi, ma), bins=NB)
+        (counts, binedges) = np.histogram(vel_y/(self.hubble_h*100.0), range=(mi, ma), bins=NB)
         xaxeshisto = binedges[:-1] + 0.5 * binwidth
         plt.plot(xaxeshisto, counts / binwidth / tot_gals, 'g-', label='y-velocity')
 
-        (counts, binedges) = np.histogram(vel_z/(self.Hubble_h*100.0), range=(mi, ma), bins=NB)
+        (counts, binedges) = np.histogram(vel_z/(self.hubble_h*100.0), range=(mi, ma), bins=NB)
         xaxeshisto = binedges[:-1] + 0.5 * binwidth
         plt.plot(xaxeshisto, counts / binwidth / tot_gals, 'b-', label='z-velocity')
 
@@ -1492,10 +1305,6 @@ class Results:
         plt.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
-
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
 
 # --------------------------------------------------------
 
@@ -1534,10 +1343,6 @@ class Results:
         plt.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
-            
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
 
 # --------------------------------------------------------
 
@@ -1582,11 +1387,6 @@ class Results:
         plt.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
-            
-        # Add this plot to our output list
-        OutputList.append(outputFile)
-
-
 
 # =================================================================
 
@@ -1598,16 +1398,13 @@ if __name__ == '__main__':
 
     import os
 
-#python3 allresults.py -d kali_512/ -f kali_512_z5.829 -n 0 7
-#(reverse-i-search)`allres': python3 allresults.py -d millennium/ -f model_z0.000 -n 0 7
-
-    model0_dir_name = "kali_512/"
-    model0_file_name = "kali_512_z5.829"
+    model0_dir_name = "/fred/oz070/jseiler/astro3d/jan2019/L500_N2160_take2/SAGE_output/"
+    model0_file_name = "converted_z0.000"
     model0_first_file = 0
-    model0_last_file = 7
-    model0_simulation = 2
+    model0_last_file = 124
+    model0_simulation = 3
     model0_IMF = 0
-    model0_tag = "Kali512"
+    model0_tag = "Genesis"
     model0_line_color = "r"
     model0_line_style = "-"
 
@@ -1660,7 +1457,8 @@ if __name__ == '__main__':
                    "line_style" : line_styles}
 
     plot_toggles = {"SMF" : 1,
-                    "BMF" : 1}
+                    "BMF" : 1,
+                    "GMF" : 1}
 
     results = Results(model_dict, plot_toggles)
     results.do_plots()
