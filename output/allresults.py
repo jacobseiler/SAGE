@@ -152,6 +152,7 @@ class Model:
         self.red_SMF = np.zeros(len(self.stellar_mass_bins)-1, dtype=np.int64)
         self.blue_SMF = np.zeros(len(self.stellar_mass_bins)-1, dtype=np.int64)
 
+        self.BMF = np.zeros(len(self.stellar_mass_bins)-1, dtype=np.int64)
 
     def get_galaxy_struct(self):
 
@@ -227,7 +228,7 @@ class Model:
             0: Mini-Millennium,
             1: Full Millennium,
             2: Kali (512^3 particles),
-            3: Genesis (L = 500 Mpc/h, N = 2400^3).
+            3: Genesis (L = 500 Mpc/h, N = 2160^3).
 
         num_files_read : Integer
             How many files will be read for this model. Used to determine the effective
@@ -263,6 +264,8 @@ class Model:
           print("Please pick a valid simulation!")
           exit(1)
 
+        # Scale the volume by the number of files that we will read. Used to ensure
+        # properties scaled by volume (e.g., SMF) gives sensible results.
         self.volume = pow(self.box_size, 3) * (num_files_read / self.total_num_files)
 
 
@@ -341,7 +344,6 @@ class Model:
 
             fname = "{0}_{1}".format(model_path, file_num)
             gals = self.read_gals(fname, debug=debug)
-
             self.calc_properties(plot_toggles, gals)
 
 
@@ -392,12 +394,14 @@ class Model:
             self.blue_SMF += counts
 
         if plot_toggles["BMF"]:
-            non_zero_baryon = np.where(G.StellarMass + G.ColdGas > 0.0)[0]
-            baryon_mass = np.log10((G.StellarMass[non_zero_baryon] + \
-                                    G.ColdGas[non_zero_baryon]) * 1.0e10 \
-                                    / self.hubble_h)
+            non_zero_baryon = np.where(gals["StellarMass"] + gals["ColdGas"] > 0.0)[0]
+            mass = np.log10((gals["StellarMass"][non_zero_baryon] + \
+                             gals["ColdGas"][non_zero_baryon]) * 1.0e10 \
+                            / self.hubble_h)
 
-            self.baryon_mass = baryon_mass  # 1.0e10 Msun.
+            (counts, binedges) = np.histogram(mass, bins=self.stellar_mass_bins)
+
+            self.BMF += counts
 
         if plot_toggles["GMF"]:
             non_zero_cold = np.where(G.ColdGas > 0.0)[0]
@@ -519,7 +523,7 @@ class Results:
 
         if plot_toggles["BMF"] == 1:
             print("Plotting the Baryon Mass Function.")
-            self.BaryonicMassFunction()
+            self.plot_BMF()
 
         if plot_toggles["GMF"] == 1:
             print("Plotting the Cold Gas Mass Function.")
@@ -609,12 +613,10 @@ class Results:
 
 # ---------------------------------------------------------
 
-    def BaryonicMassFunction(self):
+    def plot_BMF(self):
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
-
-        binwidth = 0.1  # mass function histogram bin width
 
         # For scaling the observational data, we use the values of the zeroth
         # model. We also save the plots into the output directory of the zeroth
@@ -627,23 +629,16 @@ class Results:
 
         for model in self.models:
 
-            baryon_mass = model.baryon_mass
             tag = model.tag
             color = model.line_color
             ls = model.line_style
 
-            mi = np.floor(min(baryon_mass)) - 2
-            ma = np.floor(max(baryon_mass)) + 2
-            NB = int((ma - mi) / binwidth)
+            # Set the x-axis values to be the centre of the bins.
+            bin_middles = model.stellar_mass_bins + 0.5 * model.stellar_bin_width
 
-            (counts, binedges) = np.histogram(baryon_mass, range=(mi, ma), bins=NB)
-
-            # Set the x-axis values to be the centre of the bins
-            xaxeshisto = binedges[:-1] + 0.5 * binwidth
-
-            # The BMF is normalized by the simulation volume which is in Mpc/h. 
-            ax.plot(xaxeshisto, counts/model.volume*model.hubble_h/binwidth,
-                    color=color, ls=ls, label=tag)
+            # The MMF is normalized by the simulation volume which is in Mpc/h. 
+            ax.plot(bin_middles[:-1], model.BMF/model.volume*pow(model.hubble_h, 3)/model.stellar_bin_width,
+                    color=color, ls=ls, label=tag + " - All")
 
         ax.set_yscale('log', nonposy='clip')
         ax.set_xlim([8.0, 12.5])
@@ -1464,7 +1459,7 @@ if __name__ == '__main__':
                    "line_style" : line_styles}
 
     plot_toggles = {"SMF" : 1,
-                    "BMF" : 0,
+                    "BMF" : 1,
                     "GMF" : 0,
                     "BTF" : 0}
 
