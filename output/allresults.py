@@ -136,76 +136,26 @@ class Model:
         for key in model_dict:
             setattr(self, key, model_dict[key])
 
+        # Then set default values.
 
-    def set_cosmology(self, simulation):
-        """
-        Sets the relevant cosmological values, size of the simulation box and
-        number of galaxy files.
+        # How should we bin Stellar mass.
+        self.stellar_bin_low      = 7.0 
+        self.stellar_bin_high     = 13.0 
+        self.stellar_bin_width    = 0.1 
+        self.stellar_mass_bins    = np.arange(self.stellar_bin_low,
+                                              self.stellar_bin_high + self.stellar_bin_width,
+                                              self.stellar_bin_width)
 
-        ..note:: Boxsize is in units of Mpc/h.
+        # When making histograms, the right-most bin is closed. Hence the length of the
+        # produced histogram will be `len(bins)-1`.
+        self.SMF = np.zeros(len(self.stellar_mass_bins)-1, dtype=np.int64)
+        self.red_SMF = np.zeros(len(self.stellar_mass_bins)-1, dtype=np.int64)
+        self.blue_SMF = np.zeros(len(self.stellar_mass_bins)-1, dtype=np.int64)
 
-        Parameters 
-        ----------
 
-        simulation : {0, 1, 2, 3}
-            Flags which simulation we are using.
-            0: Mini-Millennium,
-            1: Full Millennium,
-            2: Kali (512^3 particles),
-            3: Genesis (L = 500 Mpc/h, N = 2400^3).
+    def get_galaxy_struct(self):
 
-        Returns
-        -------
-
-        None.
-        """
-
-        if simulation == 0:    # Mini-Millennium
-            self.hubble_h = 0.73 
-            self.BoxSize = 62.5
-            self.MaxTreeFiles = 8
-
-        elif simulation == 1:  # Full Millennium
-            self.hubble_h = 0.73
-            self.BoxSize = 500
-            self.MaxTreeFiles = 512
-
-        elif simulation == 2: # Kali 512
-            self.hubble_h = 0.681
-            self.BoxSize = 108.96
-            self.MaxTreeFiles = 8
-
-        elif simulation == 3:            
-            self.hubble_h = 0.6751
-            self.BoxSize = 500.00 
-            self.MaxTreeFiles = 125
-
-        else:
-          print("Please pick a valid simulation!")
-          exit(1)
-
-    def read_gals(self, model_name, first_file, last_file):
-        """
-        Reads all the galaxy files for a model.
-
-        Parameters 
-        ----------
-
-        model_name : String
-            Base path to the galaxy files.  Does not include the file number or
-            trailing underscore.
-
-        first_file, last_file : Integers
-            The file range to read.
-
-        Returns
-        -------
-
-        None.
-        """
-
-        # The input galaxy structure:
-        Galdesc_full = [
+        galdesc_full = [
             ('SnapNum'                      , np.int32),
             ('Type'                         , np.int32),
             ('GalaxyIndex'                  , np.int64),
@@ -255,98 +205,149 @@ class Model:
             ('infallVvir'                   , np.float32),
             ('infallVmax'                   , np.float32)
             ]
-        names = [Galdesc_full[i][0] for i in range(len(Galdesc_full))]
-        formats = [Galdesc_full[i][1] for i in range(len(Galdesc_full))]
-        Galdesc = np.dtype({'names':names, 'formats':formats}, align=True)
+        names = [galdesc_full[i][0] for i in range(len(galdesc_full))]
+        formats = [galdesc_full[i][1] for i in range(len(galdesc_full))]
+        galdesc = np.dtype({'names':names, 'formats':formats}, align=True)
 
-        TotNTrees = 0
-        TotNGals = 0
-
-        print("Determining array storage requirements.")
-        
-        # Read each file and determine the total number of galaxies to be read in
-        goodfiles = 0
-        for fnr in range(first_file,last_file+1):
-            fname = "{0}_{1}".format(model_name, fnr)
-
-            if not os.path.isfile(fname):
-                print("File\t{0} \tdoes not exist!".format(fname))
-                raise FileNotFoundError 
-
-            if getFileSize(fname) == 0:
-                print("File\t{0} \tis empty!".format(fname))
-                raise ValueError 
-
-            # We're only reading the header information at the moment.
-            with open(fname, "rb") as fin:
-                Ntrees = np.fromfile(fin,np.dtype(np.int32),1)
-                NtotGals = np.fromfile(fin,np.dtype(np.int32),1)[0]
-                TotNTrees = TotNTrees + Ntrees
-                TotNGals = TotNGals + NtotGals
-                goodfiles += 1
-
-        print("")
-        print("Input files contain:\t{0} trees ;\t{1} galaxies.".format(TotNTrees, TotNGals))
-        print("")
-
-        G = np.empty(TotNGals, dtype=Galdesc)
-
-        offset = 0
-
-        # Open each file in turn and read in the preamble variables and structure.
-        print("Reading in files.")
-        for fnr in range(first_file,last_file+1):
-            fname = "{0}_{1}".format(model_name, fnr)
-        
-            if not os.path.isfile(fname):
-                print("Couldn't find file {0}. This should've been caught in "
-                      "the above block".format(fname))
-                raise FileNotFoundError
-
-            if getFileSize(fname) == 0:
-                print("File {0} had zero size. This should've been caught in "
-                      "the above block.".format(fname))
-                continue
-        
-            fin = open(fname, 'rb')
-
-            with open(fname, "rb") as fin:
-                Ntrees = np.fromfile(fin, np.dtype(np.int32), 1)
-                NtotGals = np.fromfile(fin, np.dtype(np.int32), 1)[0]
-                GalsPerTree = np.fromfile(fin, np.dtype((np.int32, Ntrees)),1)
-
-                print(":   Reading N={0} \tgalaxies from file: {1}".format(NtotGals,fname))
-                GG = np.fromfile(fin, Galdesc, NtotGals)
-
-            # Slice the file array into the global array
-            # N.B. the copy() part is required otherwise we simply point to
-            # the GG data which changes from file to file
-            # NOTE THE WAY PYTHON WORKS WITH THESE INDICES!
-            G[offset:offset+NtotGals]=GG[0:NtotGals].copy()
-            
-            del(GG)
-            offset = offset + NtotGals  # Update the offset position for the global array
-
-        print("")
-        print("Total galaxies considered: {0}".format(TotNGals))
-
-        G = G.view(np.recarray)
-        self.gals = G
-
-        w = np.where(G.StellarMass > 1.0)[0]
-        print("Galaxies more massive than 10^10Msun/h: {0}".format(len(w)))
-
-        print("")
-
-        # Scale the volume depending upon the fraction of files read. 
-        self.volume = self.BoxSize**3.0 * goodfiles / self.MaxTreeFiles
+        self.galaxy_struct = galdesc
 
 
-    def calc_properties(self, plot_toggles):
+    def set_cosmology(self, simulation, num_files_read):
         """
-        Calculates the properties for the galaxies of a model. Depending upon
-        which plots are being generated, the exact properties calculated will
-        change. 
+        Sets the relevant cosmological values, size of the simulation box and
+        number of galaxy files.
+
+        ..note:: ``box_size`` is in units of Mpc/h.
+
+        Parameters 
+        ----------
+
+        simulation : {0, 1, 2, 3}
+            Flags which simulation we are using.
+            0: Mini-Millennium,
+            1: Full Millennium,
+            2: Kali (512^3 particles),
+            3: Genesis (L = 500 Mpc/h, N = 2400^3).
+
+        num_files_read : Integer
+            How many files will be read for this model. Used to determine the effective
+            volume of the simulation.
+
+        Returns
+        -------
+
+        None.
+        """
+
+        if simulation == 0:    # Mini-Millennium
+            self.hubble_h = 0.73
+            self.box_size = 62.5
+            self.total_num_files = 8
+
+        elif simulation == 1:  # Full Millennium
+            self.hubble_h = 0.73
+            self.box_size = 500
+            self.total_num_files = 512
+
+        elif simulation == 2: # Kali 512
+            self.hubble_h = 0.681
+            self.box_size = 108.96
+            self.total_num_files = 8
+
+        elif simulation == 3:
+            self.hubble_h = 0.6751
+            self.box_size = 500.00
+            self.total_num_files = 128
+
+        else:
+          print("Please pick a valid simulation!")
+          exit(1)
+
+        self.volume = pow(self.box_size, 3) * (num_files_read / self.total_num_files)
+
+
+    def read_gals(self, fname, debug=0):
+        """
+        Reads a single galaxy file.
+
+        Parameters 
+        ----------
+
+        fname : String
+            Name of the file we're reading.
+
+        Returns
+        -------
+
+        gals : ``numpy`` structured array with format given by ``get_galaxy_struct()``
+            The galaxies for this file.
+        """
+
+        # Flag with others: How do we want to handle missing files?
+        # Skip or throw errors?  This is important because if we skip, we will need to
+        # manually count the number of files read rather than doing (last_file -
+        # first_file) + 1.
+
+        if not os.path.isfile(fname):
+            print("File\t{0} \tdoes not exist!".format(fname))
+            raise FileNotFoundError 
+
+        if getFileSize(fname) == 0:
+            print("File\t{0} \tis empty!".format(fname))
+            raise ValueError 
+
+        with open(fname, "rb") as f:
+            Ntrees = np.fromfile(f, np.dtype(np.int32),1)[0]
+            Ngals = np.fromfile(f, np.dtype(np.int32),1)[0]
+            gals_per_tree = np.fromfile(f, np.dtype((np.int32, Ntrees)), 1)
+
+            gals = np.fromfile(f, self.galaxy_struct, Ngals)
+
+        if debug:
+            print("")
+            print("File {0} contained {1} trees with {2} galaxies".format(fname, Ntrees, Ngals))
+
+            w = np.where(gals["StellarMass"] > 1.0)[0]
+            print("{0} of these galaxies have mass greater than 10^10Msun/h".format(len(w)))
+
+        return gals
+
+
+    def calc_properties_all_files(self, plot_toggles, model_path, first_file, last_file,
+                                  debug=0):
+        """
+        Calculates galaxy properties for all files of a single Model.
+
+        Parameters 
+        ----------
+
+        plot_toggles : Dictionary 
+            Specifies which plots will be generated.
+
+        model_path : String
+            Base path to the galaxy files.  Does not include the file number or
+            trailing underscore.
+
+        first_file, last_file : Integers
+            The file range to read.
+
+        Returns
+        -------
+
+        None.
+        """
+
+        for file_num in range(first_file, last_file+1):
+
+            fname = "{0}_{1}".format(model_path, file_num)
+            gals = self.read_gals(fname, debug=debug)
+
+            self.calc_properties(plot_toggles, gals)
+
+
+    def calc_properties(self, plot_toggles, gals):
+        """
+        Calculates galaxy properties for single Model.
 
         ..note:: Refer to the class-level documentation for a full list of the
                  properties calculated and their associated units.
@@ -355,8 +356,14 @@ class Model:
         ----------
 
         plot_toggles : Dictionary 
-            Specifies which plots are being generated. Used to determine which
-            properties are needed.
+            Specifies which plots will be generated.
+
+        model_path : String
+            Base path to the galaxy files.  Does not include the file number or
+            trailing underscore.
+
+        first_file, last_file : Integers
+            The file range to read.
 
         Returns
         -------
@@ -364,16 +371,25 @@ class Model:
         None.
         """
 
-        G = self.gals
-
         if plot_toggles["SMF"]:
-            non_zero_stellar = np.where(G.StellarMass > 0.0)[0]
-            stellar_mass = np.log10(G.StellarMass[non_zero_stellar] * 1.0e10 / self.hubble_h)
-            stellar_sSFR = (G.SfrDisk[non_zero_stellar] + G.SfrBulge[non_zero_stellar]) / \
-                           (G.StellarMass[non_zero_stellar] * 1.0e10 / self.hubble_h)
 
-            self.stellar_mass = stellar_mass  # 1.0e10 Msun. 
-            self.stellar_sSFR = stellar_sSFR  # Unitless.
+            non_zero_stellar = np.where(gals["StellarMass"] > 0.0)[0]
+            mass = np.log10(gals["StellarMass"][non_zero_stellar] * 1.0e10 / self.hubble_h)
+            sSFR = (gals["SfrDisk"][non_zero_stellar] + gals["SfrBulge"][non_zero_stellar]) / \
+                   (gals["StellarMass"][non_zero_stellar] * 1.0e10 / self.hubble_h)
+            
+            (counts, binedges) = np.histogram(mass, bins=self.stellar_mass_bins)
+            self.SMF += counts
+
+            red_gals = np.where(sSFR < 10.0**sSFRcut)[0]
+            red_mass = mass[red_gals]
+            (counts, binedges) = np.histogram(red_mass, bins=self.stellar_mass_bins)
+            self.red_SMF += counts
+
+            blue_gals = np.where(sSFR < 10.0**sSFRcut)[0]
+            blue_mass = mass[blue_gals]
+            (counts, binedges) = np.histogram(blue_mass, bins=self.stellar_mass_bins)
+            self.blue_SMF += counts
 
         if plot_toggles["BMF"]:
             non_zero_baryon = np.where(G.StellarMass + G.ColdGas > 0.0)[0]
@@ -392,7 +408,17 @@ class Model:
             self.cold_mass = cold_mass
             self.cold_sSFR = cold_sSFR
 
-        return
+        if plot_toggles["BTF"]:
+
+            centrals = np.where((G.Type == 0) & (G.StellarMass + G.ColdGas > 0.0) & 
+                                (G.BulgeMass / G.StellarMass > 0.1) &
+                                (G.BulgeMass / G.StellarMass < 0.5))[0]
+            if(len(centrals) > dilute):
+                print(type(centrals))
+                centrals = sample(list(centrals), dilute)
+        
+            self.central_baryon_mass = np.log10((G.StellarMass[centrals] + G.ColdGas[centrals]) * 1.0e10 / self.hubble_h)
+            self.central_vel = np.log10(G.Vmax[centrals])
 
 
 class Results:
@@ -413,7 +439,7 @@ class Results:
         plotting, otherwise it will be skipped.
     """
 
-    def __init__(self, all_models_dict=None, plot_toggles=None):
+    def __init__(self, all_models_dict=None, plot_toggles=None, debug=0):
         """
         Initialises the individual ``Model`` class instances and adds them to
         the ``Results`` class instance.
@@ -448,17 +474,19 @@ class Results:
 
             model_dict = {}
             for field in all_models_dict.keys():
-
                 model_dict[field] = all_models_dict[field][model_num]
 
             model = Model(model_dict)
-            model.set_cosmology(model_dict["simulation"])
-            model.read_gals(model_dict["model_path"],
-                            model_dict["first_file"],
-                            model_dict["last_file"])
 
-            # Properties calculated depends upon the plots we're making.
-            model.calc_properties(plot_toggles) 
+            model.get_galaxy_struct()
+            model.set_cosmology(model_dict["simulation"],
+                                model_dict["last_file"]-model_dict["first_file"]-1)
+
+            # To be more memory concious, we calculate the required properties on a
+            # file-by-file basis. This ensures we do not keep ALL the galaxy data in memory. 
+            model.calc_properties_all_files(plot_toggles, model_dict["model_path"],
+                                            model_dict["first_file"],
+                                            model_dict["last_file"], debug=debug) 
 
             all_models.append(model)
 
@@ -487,7 +515,7 @@ class Results:
 
         if plot_toggles["SMF"] == 1:
             print("Plotting the Stellar Mass Function.")
-            self.StellarMassFunction()
+            self.plot_SMF()
 
         if plot_toggles["BMF"] == 1:
             print("Plotting the Baryon Mass Function.")
@@ -496,7 +524,10 @@ class Results:
         if plot_toggles["GMF"] == 1:
             print("Plotting the Cold Gas Mass Function.")
             self.GasMassFunction()
-        #res.BaryonicTullyFisher(model.gals)
+
+        if plot_toggles["BTF"] == 1:
+            print("Plotting the Baryonic Tully-Fisher relation.")
+            self.BaryonicTullyFisher()
         #res.SpecificStarFormationRate(model.gals)
         #res.GasFraction(model.gals)
         #res.Metallicity(model.gals)
@@ -511,12 +542,10 @@ class Results:
 
 # --------------------------------------------------------
 
-    def StellarMassFunction(self):
+    def plot_SMF(self):
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
-
-        binwidth = 0.1  # mass function histogram bin width
 
         # For scaling the observational data, we use the values of the zeroth
         # model. We also save the plots into the output directory of the zeroth
@@ -530,8 +559,6 @@ class Results:
         # Go through each of the models and plot. 
         for model in self.models:
 
-            stellar_mass = model.stellar_mass
-            stellar_sSFR = model.stellar_sSFR
             tag = model.tag
 
             # If we only have one model, we will split it into red and blue
@@ -543,36 +570,19 @@ class Results:
                 color = "k"
                 ls = "-"
 
-            mi = np.floor(min(stellar_mass)) - 2
-            ma = np.floor(max(stellar_mass)) + 2
-            NB = int((ma - mi) / binwidth)
+            # Set the x-axis values to be the centre of the bins.
+            bin_middles = model.stellar_mass_bins + 0.5 * model.stellar_bin_width
 
-            (counts, binedges) = np.histogram(stellar_mass, range=(mi, ma),
-                                              bins=NB)
-
-            # Set the x-axis values to be the centre of the bins
-            xaxeshisto = binedges[:-1] + 0.5 * binwidth
-            
-            # If we're plotting one model, calculate red and blue populations.
-            if self.num_models > 1: 
-                w = np.where(stellar_sSFR < 10.0**sSFRcut)[0]
-                massRED = stellar_mass[w]
-                (countsRED, binedges) = np.histogram(massRED, range=(mi, ma), bins=NB)
-
-                w = np.where(stellar_sSFR > 10.0**sSFRcut)[0]
-                massBLU = stellar_mass[w]
-                (countsBLU, binedges) = np.histogram(massBLU, range=(mi, ma), bins=NB)
-                    
             # The SMF is normalized by the simulation volume which is in Mpc/h. 
-            ax.plot(xaxeshisto, counts/model.volume*pow(model.hubble_h, 3)/binwidth,
+            ax.plot(bin_middles[:-1], model.SMF/model.volume*pow(model.hubble_h, 3)/model.stellar_bin_width,
                     color=color, ls=ls, label=tag + " - All")
 
             # If we only have one model, plot the sub-populations.
             if self.num_models == 1:
-                ax.plot(xaxeshisto, countsRED / model.volume * model.hubble_h*model.hubble_h*model.hubble_h / binwidth,
+                ax.plot(bin_middles[:-1], model.red_SMF/model.volume*pow(model.hubble_h, 3)/model.stellar_bin_width,
                         'r:', lw=2, label=tag + " - Red")
-                ax.plot(xaxeshisto, countsBLU / model.volume * model.hubble_h*model.hubble_h*model.hubble_h / binwidth,
-                        'b:', lw=2, label=tag + " - Blue")
+                ax.plot(bin_middles[:-1], model.blue_SMF/model.volume*pow(model.hubble_h, 3)/model.stellar_bin_width,
+                        'r:', lw=2, label=tag + " - Blue")
 
         ax.set_yscale('log', nonposy='clip')
         ax.set_xlim([8.0, 12.5])
@@ -714,46 +724,43 @@ class Results:
 
 # ---------------------------------------------------------
     
-    def BaryonicTullyFisher(self, G):
-    
-        print("Plotting the baryonic TF relationship")
-    
-        seed(2222)
-    
-        plt.figure()  # New figure
-        ax = plt.subplot(111)  # 1 plot on the figure
-    
-        # w = np.where((G.Type == 0) & (G.StellarMass + G.ColdGas > 0.0) & (G.Vmax > 0.0))[0]
-        w = np.where((G.Type == 0) & (G.StellarMass + G.ColdGas > 0.0) & 
-          (G.BulgeMass / G.StellarMass > 0.1) & (G.BulgeMass / G.StellarMass < 0.5))[0]
-        if(len(w) > dilute): w = sample(w, dilute)
-    
-        mass = np.log10((G.StellarMass[w] + G.ColdGas[w]) * 1.0e10 / self.hubble_h)
-        vel = np.log10(G.Vmax[w])
-                    
-        plt.scatter(vel, mass, marker='o', s=1, c='k', alpha=0.5, label='Model Sb/c galaxies')
-                
-        # overplot Stark, McGaugh & Swatters 2009 (assumes h=0.75? ... what IMF?)
-        w = np.arange(0.5, 10.0, 0.5)
-        TF = 3.94*w + 1.79
-        plt.plot(w, TF, 'b-', lw=2.0, label='Stark, McGaugh \& Swatters 2009')
-            
-        plt.ylabel(r'$\log_{10}\ M_{\mathrm{bar}}\ (M_{\odot})$')  # Set the y...
-        plt.xlabel(r'$\log_{10}V_{max}\ (km/s)$')  # and the x-axis labels
-            
-        # Set the x and y axis minor ticks
+    def BaryonicTullyFisher(self):
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+        binwidth = 0.1  # mass function histogram bin width
+
+        # For scaling the observational data, we use the values of the zeroth
+        # model. We also save the plots into the output directory of the zeroth
+        # model. 
+        zeroth_output_path = (self.models)[0].output_path
+
+        ax = obs.plot_btf_data(ax) 
+
+        for model in self.models:
+
+            vel = model.central_vel
+            mass = model.central_baryon_mass
+
+            ax.scatter(vel, mass, marker='o', s=1, c='k', alpha=0.5, label='Model Sb/c galaxies')
+
+        ax.set_ylabel(r'$\log_{10}\ M_{\mathrm{bar}}\ (M_{\odot})$')
+        ax.set_xlabel(r'$\log_{10}V_{max}\ (km/s)$')
+
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.05))
         ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
-            
-        plt.axis([1.4, 2.6, 8.0, 12.0])
-            
-        leg = plt.legend(loc='lower right')
-        leg.draw_frame(False)  # Don't want a box frame
-        for t in leg.get_texts():  # Reduce the size of the text
+
+        ax.set_xlim([1.4, 2.6])
+        ax.set_ylim([8.0, 12.0])
+
+        leg = ax.legend(loc='lower right')
+        leg.draw_frame(False)
+        for t in leg.get_texts():
             t.set_fontsize('medium')
             
-        outputFile = OutputDir + '4.BaryonicTullyFisher' + OutputFormat
-        plt.savefig(outputFile)  # Save the figure
+        outputFile = "{0}/4.BaryonicTullyFisher{1}".format(zeroth_output_path, OutputFormat) 
+        fig.savefig(outputFile)  # Save the figure
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
@@ -1399,12 +1406,12 @@ if __name__ == '__main__':
     import os
 
     model0_dir_name = "/fred/oz070/jseiler/astro3d/jan2019/L500_N2160_take2/SAGE_output/"
-    model0_file_name = "converted_z0.000"
+    model0_file_name = "SF0.10_z0.000"
     model0_first_file = 0
-    model0_last_file = 124
+    model0_last_file = 127 
     model0_simulation = 3
-    model0_IMF = 0
-    model0_tag = "Genesis"
+    model0_IMF = 1
+    model0_tag = r"$\mathbf{Genesis}$"
     model0_line_color = "r"
     model0_line_style = "-"
 
@@ -1413,8 +1420,8 @@ if __name__ == '__main__':
     model1_first_file = 0
     model1_last_file = 7
     model1_simulation = 0
-    model1_IMF = 0
-    model1_tag = "Mini-Millennium"
+    model1_IMF = 1
+    model1_tag = r"$\mathbf{Mini-Millennium}$"
     model1_line_color = "b"
     model1_line_style = "--"
 
@@ -1457,8 +1464,9 @@ if __name__ == '__main__':
                    "line_style" : line_styles}
 
     plot_toggles = {"SMF" : 1,
-                    "BMF" : 1,
-                    "GMF" : 1}
+                    "BMF" : 0,
+                    "GMF" : 0,
+                    "BTF" : 0}
 
-    results = Results(model_dict, plot_toggles)
+    results = Results(model_dict, plot_toggles, debug=0)
     results.do_plots()
