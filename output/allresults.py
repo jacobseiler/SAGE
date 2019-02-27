@@ -269,7 +269,7 @@ class Model:
         self.volume = pow(self.box_size, 3) * (num_files_read / self.total_num_files)
 
 
-    def read_gals(self, fname, debug=0):
+    def read_gals(self, fname, file_num, debug=0, plot_galaxies=1):
         """
         Reads a single galaxy file.
 
@@ -310,8 +310,36 @@ class Model:
             print("")
             print("File {0} contained {1} trees with {2} galaxies".format(fname, Ntrees, Ngals))
 
+            w = np.where(gals["SnapNum"] == 131)[0]
+
+            for dim_count, dim in enumerate(["x", "y", "z"]):
+                print("Min {0} {1}\tMax {0} {2}".format(dim,
+                                                        np.min(gals["Pos"][w][dim_count]),
+                                                        np.max(gals["Pos"][w][dim_count]))) 
+
             w = np.where(gals["StellarMass"] > 1.0)[0]
             print("{0} of these galaxies have mass greater than 10^10Msun/h".format(len(w)))
+
+        if plot_galaxies:
+
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+
+            w = sample(list(np.arange(len(gals))), 10000)
+
+            ax.scatter(gals["Pos"][w,0], gals["Pos"][w,1], alpha=0.5)
+
+            ax.set_xlim([0.0, self.box_size])
+            ax.set_ylim([0.0, self.box_size])
+
+            ax.set_xlabel(r"$\mathbf{x \: [h^{-1}Mpc]}$")
+            ax.set_ylabel(r"$\mathbf{y \: [h^{-1}Mpc]}$")
+
+            outputFile = "./galaxies_{0}{1}".format(file_num, OutputFormat)
+            fig.savefig(outputFile)
+            print("Saved file to {0}".format(outputFile))
+            plt.close()
+
 
         return gals
 
@@ -343,8 +371,9 @@ class Model:
         for file_num in range(first_file, last_file+1):
 
             fname = "{0}_{1}".format(model_path, file_num)
-            gals = self.read_gals(fname, debug=debug)
+            gals = self.read_gals(fname, file_num, debug=debug)
             self.calc_properties(plot_toggles, gals)
+        exit()
 
 
     def calc_properties(self, plot_toggles, gals):
@@ -1401,9 +1430,9 @@ if __name__ == '__main__':
     import os
 
     model0_dir_name = "/fred/oz070/jseiler/astro3d/jan2019/L500_N2160_take2/SAGE_output/"
-    model0_file_name = "SF0.10_z0.000"
+    model0_file_name = "subvolume_SF0.10_z0.000"
     model0_first_file = 0
-    model0_last_file = 127 
+    model0_last_file = 63 
     model0_simulation = 3
     model0_IMF = 1
     model0_tag = r"$\mathbf{Genesis}$"
@@ -1463,5 +1492,5 @@ if __name__ == '__main__':
                     "GMF" : 0,
                     "BTF" : 0}
 
-    results = Results(model_dict, plot_toggles, debug=0)
+    results = Results(model_dict, plot_toggles, debug=1)
     results.do_plots()
