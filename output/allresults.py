@@ -182,6 +182,9 @@ class Model:
         self.BTF_mass = []
         self.BTF_vel = []
 
+        self.sSFR_mass = []
+        self.sSFR_sSFR = []
+
     def get_galaxy_struct(self):
 
         galdesc_full = [
@@ -473,25 +476,33 @@ class Model:
         # TODO: Again confirm how we want to handle skipped files.
         file_sample_size = int(len(gals) / self.num_gals * self.sample_size) 
 
-        if plot_toggles["SMF"]:
+        if plot_toggles["SMF"] or plot_toggles["sSFR"]:
 
             non_zero_stellar = np.where(gals["StellarMass"] > 0.0)[0]
             stellar_mass = np.log10(gals["StellarMass"][non_zero_stellar] * 1.0e10 / self.hubble_h)
             sSFR = (gals["SfrDisk"][non_zero_stellar] + gals["SfrBulge"][non_zero_stellar]) / \
                    (gals["StellarMass"][non_zero_stellar] * 1.0e10 / self.hubble_h)
-            
-            (counts, binedges) = np.histogram(stellar_mass, bins=self.stellar_mass_bins)
-            self.SMF += counts
 
-            red_gals = np.where(sSFR < 10.0**sSFRcut)[0]
-            red_mass = stellar_mass[red_gals]
-            (counts, binedges) = np.histogram(red_mass, bins=self.stellar_mass_bins)
-            self.red_SMF += counts
+            if plot_toggles["SMF"]:
+                (counts, binedges) = np.histogram(stellar_mass, bins=self.stellar_mass_bins)
+                self.SMF += counts
 
-            blue_gals = np.where(sSFR < 10.0**sSFRcut)[0]
-            blue_mass = stellar_mass[blue_gals]
-            (counts, binedges) = np.histogram(blue_mass, bins=self.stellar_mass_bins)
-            self.blue_SMF += counts
+                red_gals = np.where(sSFR < 10.0**sSFRcut)[0]
+                red_mass = stellar_mass[red_gals]
+                (counts, binedges) = np.histogram(red_mass, bins=self.stellar_mass_bins)
+                self.red_SMF += counts
+
+                blue_gals = np.where(sSFR < 10.0**sSFRcut)[0]
+                blue_mass = stellar_mass[blue_gals]
+                (counts, binedges) = np.histogram(blue_mass, bins=self.stellar_mass_bins)
+                self.blue_SMF += counts
+
+            if plot_toggles["sSFR"]:
+                if len(non_zero_stellar) > file_sample_size:
+                    non_zero_stellar = np.random.choice(len(non_zero_stellar), size=file_sample_size)
+
+                self.sSFR_mass.extend(list(stellar_mass[non_zero_stellar]))
+                self.sSFR_sSFR.extend(list(np.log10(sSFR[non_zero_stellar])))
 
         if plot_toggles["BMF"]:
             non_zero_baryon = np.where(gals["StellarMass"] + gals["ColdGas"] > 0.0)[0]
@@ -510,7 +521,7 @@ class Model:
 
         if plot_toggles["BTF"]:
 
-            w = np.where(gals["StellarMass"] > 0.0)[0]
+            w = np.where((gals["StellarMass"] > 0.01) & (gals["ColdGas"] > 0.01))[0]
             centrals = np.where((gals["Type"][w] == 0) & (gals["StellarMass"][w] + gals["ColdGas"][w] > 0.0) & \
                                 (gals["BulgeMass"][w] / gals["StellarMass"][w] > 0.1) & \
                                 (gals["BulgeMass"][w] / gals["StellarMass"][w] < 0.5))[0]
@@ -523,7 +534,6 @@ class Model:
 
             self.BTF_mass.extend(list(baryon_mass))
             self.BTF_vel.extend(list(velocity))
-
 
 
 class Results:
@@ -633,7 +643,10 @@ class Results:
         if plot_toggles["BTF"] == 1:
             print("Plotting the Baryonic Tully-Fisher relation.")
             self.plot_BTF()
-        #res.SpecificStarFormationRate(model.gals)
+
+        if plot_toggles["sSFR"] == 1:
+            print("Plotting the specific star formation rate.")
+            self.plot_sSFR()
         #res.GasFraction(model.gals)
         #res.Metallicity(model.gals)
         #res.BlackHoleBulgeRelationship(model.gals)
@@ -768,8 +781,6 @@ class Results:
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
-        binwidth = 0.1  # mass function histogram bin width
-
         # For scaling the observational data, we use the values of the zeroth
         # model. We also save the plots into the output directory of the zeroth
         # model. 
@@ -818,11 +829,7 @@ class Results:
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
-        binwidth = 0.1  # mass function histogram bin width
-
-        # For scaling the observational data, we use the values of the zeroth
-        # model. We also save the plots into the output directory of the zeroth
-        # model. 
+        # We save the plots into the output directory of the zeroth model. 
         zeroth_output_path = (self.models)[0].output_path
 
         ax = obs.plot_btf_data(ax) 
@@ -851,48 +858,50 @@ class Results:
             t.set_fontsize('medium')
             
         outputFile = "{0}/4.BaryonicTullyFisher{1}".format(zeroth_output_path, OutputFormat) 
-        fig.savefig(outputFile)  # Save the figure
+        fig.savefig(outputFile)
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
 # ---------------------------------------------------------
     
-    def SpecificStarFormationRate(self, G):
-    
-        print("Plotting the specific SFR")
-    
-        seed(2222)
-    
-        plt.figure()  # New figure
-        ax = plt.subplot(111)  # 1 plot on the figure
+    def plot_sSFR(self):
 
-        w = np.where(G.StellarMass > 0.01)[0]
-        if(len(w) > dilute): w = sample(w, dilute)
-        
-        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.hubble_h)
-        sSFR = np.log10( (G.SfrDisk[w] + G.SfrBulge[w]) / (G.StellarMass[w] * 1.0e10 / self.hubble_h) )
-        plt.scatter(mass, sSFR, marker='o', s=1, c='k', alpha=0.5, label='Model galaxies')
-                
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+        # We save the plots into the output directory of the zeroth model. 
+        zeroth_output_path = (self.models)[0].output_path
+
+        for model in self.models:
+
+            tag = model.tag
+            color = model.color
+            marker = model.marker
+
+            ax.scatter(model.sSFR_mass, model.sSFR_sSFR, marker=marker, s=1, color=color,
+                       alpha=0.5, label=tag + "galaxies")
+
         # overplot dividing line between SF and passive
         w = np.arange(7.0, 13.0, 1.0)
-        plt.plot(w, w/w*sSFRcut, 'b:', lw=2.0)
-            
-        plt.ylabel(r'$\log_{10}\ s\mathrm{SFR}\ (\mathrm{yr^{-1}})$')  # Set the y...
-        plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
-            
+        ax.plot(w, w/w*sSFRcut, 'b:', lw=2.0)
+
+        ax.set_ylabel(r"$\log_{10}\ s\mathrm{SFR}\ (\mathrm{yr^{-1}})$")
+        ax.set_xlabel(r"$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$")
+
         # Set the x and y axis minor ticks
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.05))
         ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
+
+        ax.set_xlim([8.0, 12.0])
+        ax.set_ylim([-16.0, -8.0])
             
-        plt.axis([8.0, 12.0, -16.0, -8.0])
-            
-        leg = plt.legend(loc='lower right')
-        leg.draw_frame(False)  # Don't want a box frame
-        for t in leg.get_texts():  # Reduce the size of the text
+        leg = ax.legend(loc='lower right')
+        leg.draw_frame(False)
+        for t in leg.get_texts():
             t.set_fontsize('medium')
             
-        outputFile = OutputDir + '5.SpecificStarFormationRate' + OutputFormat
-        plt.savefig(outputFile)  # Save the figure
+        outputFile = "{0}/5.SpecificStarFormationRate{1}".format(zeroth_output_path, OutputFormat) 
+        fig.savefig(outputFile)
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
@@ -1558,10 +1567,11 @@ if __name__ == '__main__':
                    "line_style"  : line_styles,
                    "marker"      : markers}
 
-    plot_toggles = {"SMF" : 1,
-                    "BMF" : 1,
-                    "GMF" : 1,
-                    "BTF" : 1}
+    plot_toggles = {"SMF"  : 1,
+                    "BMF"  : 1,
+                    "GMF"  : 1,
+                    "BTF"  : 1,
+                    "sSFR" : 1}
 
     results = Results(model_dict, plot_toggles, debug=0)
     results.do_plots()
