@@ -96,7 +96,7 @@ class Model:
     tag : string
         Tag placed on the legend for this model.
 
-    line_color : string
+    color : string
         Line color used for this model.
 
     line_style : string
@@ -669,7 +669,7 @@ class Results:
             # If we only have one model, we will split it into red and blue
             # sub-populations.
             if len(self.models) > 1:
-                color = model.line_color
+                color = model.color
                 ls = model.line_style
             else:
                 color = "k"
@@ -731,7 +731,7 @@ class Results:
         for model in self.models:
 
             tag = model.tag
-            color = model.line_color
+            color = model.color
             ls = model.line_style
 
             # Set the x-axis values to be the centre of the bins.
@@ -781,7 +781,7 @@ class Results:
         for model in self.models:
 
             tag = model.tag
-            color = model.line_color
+            color = model.color
             ls = model.line_style
 
             # Set the x-axis values to be the centre of the bins.
@@ -830,9 +830,11 @@ class Results:
         for model in self.models:
 
             tag = model.tag
+            color = model.color
+            marker = model.marker
 
-            ax.scatter(model.BTF_vel, model.BTF_mass, marker='o', s=1, c='k',
-                       alpha=0.5, label=tag + " Sb/c galaxies")
+            ax.scatter(model.BTF_vel, model.BTF_mass, marker=marker, s=1,
+                       color=color, alpha=0.5, label=tag + " Sb/c galaxies")
 
         ax.set_ylabel(r'$\log_{10}\ M_{\mathrm{bar}}\ (M_{\odot})$')
         ax.set_xlabel(r'$\log_{10}V_{max}\ (km/s)$')
@@ -1501,8 +1503,9 @@ if __name__ == '__main__':
     model0_simulation = 3
     model0_IMF = 1
     model0_tag = r"$\mathbf{Genesis}$"
-    model0_line_color = "r"
+    model0_color = "r"
     model0_line_style = "-"
+    model0_marker = "x"
 
     model1_dir_name = "millennium/"
     model1_file_name = "model_z0.000"
@@ -1511,8 +1514,9 @@ if __name__ == '__main__':
     model1_simulation = 0
     model1_IMF = 1
     model1_tag = r"$\mathbf{Mini-Millennium}$"
-    model1_line_color = "b"
+    model1_color = "b"
     model1_line_style = "--"
+    model1_marker = "o"
 
     dir_names = [model0_dir_name, model1_dir_name]
     file_names = [model0_file_name, model1_file_name]
@@ -1521,8 +1525,9 @@ if __name__ == '__main__':
     simulations = [model0_simulation, model1_simulation]
     IMFs = [model0_IMF, model1_IMF]
     tags = [model0_tag, model1_tag]
-    line_colors = [model0_line_color, model1_line_color]
+    colors = [model0_color, model1_color]
     line_styles = [model0_line_style, model1_line_style]
+    markers = [model0_marker, model1_marker]
 
     model_paths = []
     output_paths = []
@@ -1542,15 +1547,16 @@ if __name__ == '__main__':
     print("Running allresults...")
 
     # First lets build a dictionary out of all the model parameters passed.
-    model_dict = { "model_path" : model_paths,
+    model_dict = { "model_path"  : model_paths,
                    "output_path" : output_paths,
-                   "first_file" : first_files,
-                   "last_file" : last_files,
-                   "simulation" : simulations,
-                   "IMF" : IMFs,
-                   "tag" : tags,
-                   "line_color" : line_colors,
-                   "line_style" : line_styles}
+                   "first_file"  : first_files,
+                   "last_file"   : last_files,
+                   "simulation"  : simulations,
+                   "IMF"         : IMFs,
+                   "tag"         : tags,
+                   "color"       : colors,
+                   "line_style"  : line_styles,
+                   "marker"      : markers}
 
     plot_toggles = {"SMF" : 1,
                     "BMF" : 1,
