@@ -33,6 +33,13 @@ import observations as obs
 # manually count the number of files read rather than doing (last_file -
 # first_file) + 1.
 
+# TODO: Do we want to add lines showing the mean/std values for things such as BTF and
+# sSFR?
+
+# TODO: For all plots, ensure that x attributes are set first, then y.
+
+# TODO: Do we care about warnings about dividing by 0?  Should we just pull all those
+# galaxies out of the analaysis at the very beginning?
 
 # ================================================================================
 # Basic variables
@@ -184,6 +191,9 @@ class Model:
 
         self.sSFR_mass = []
         self.sSFR_sSFR = []
+
+        self.gas_frac_mass = []
+        self.gas_frac = []
 
     def get_galaxy_struct(self):
 
@@ -521,10 +531,10 @@ class Model:
 
         if plot_toggles["BTF"]:
 
-            w = np.where((gals["StellarMass"] > 0.01) & (gals["ColdGas"] > 0.01))[0]
-            centrals = np.where((gals["Type"][w] == 0) & (gals["StellarMass"][w] + gals["ColdGas"][w] > 0.0) & \
-                                (gals["BulgeMass"][w] / gals["StellarMass"][w] > 0.1) & \
-                                (gals["BulgeMass"][w] / gals["StellarMass"][w] < 0.5))[0]
+            centrals = np.where((gals["Type"] == 0) & (gals["StellarMass"] + gals["ColdGas"] > 0.0) & \
+                                (gals["StellarMass"] > 0.0) & (gals["ColdGas"] > 0.0) & \
+                                (gals["BulgeMass"] / gals["StellarMass"] > 0.1) & \
+                                (gals["BulgeMass"] / gals["StellarMass"] < 0.5))[0]
 
             if len(centrals) > file_sample_size:
                 centrals = np.random.choice(centrals, size=file_sample_size)
@@ -534,6 +544,22 @@ class Model:
 
             self.BTF_mass.extend(list(baryon_mass))
             self.BTF_vel.extend(list(velocity))
+
+        if plot_toggles["gas_frac"]:
+
+            
+            centrals = np.where((gals["Type"] == 0) & (gals["StellarMass"] + gals["ColdGas"] > 0.0) & 
+                                (gals["BulgeMass"] / gals["StellarMass"] > 0.1) & \
+                                (gals["BulgeMass"] / gals["StellarMass"] < 0.5))[0]
+
+            if len(centrals) > file_sample_size:
+                centrals = np.random.choice(centrals, size=file_sample_size)
+        
+            stellar_mass = np.log10(gals["StellarMass"][centrals] * 1.0e10 / self.hubble_h)
+            gas_fraction = gals["ColdGas"][centrals] / (gals["StellarMass"][centrals] + gals["ColdGas"][centrals])
+
+            self.gas_frac_mass.extend(list(stellar_mass))
+            self.gas_frac.extend(list(gas_fraction))
 
 
 class Results:
@@ -647,7 +673,10 @@ class Results:
         if plot_toggles["sSFR"] == 1:
             print("Plotting the specific star formation rate.")
             self.plot_sSFR()
-        #res.GasFraction(model.gals)
+
+        if plot_toggles["gas_frac"] == 1:
+            print("Plotting the gas fraction.")
+            self.plot_gas_frac()
         #res.Metallicity(model.gals)
         #res.BlackHoleBulgeRelationship(model.gals)
         #res.QuiescentFraction(model.gals)
@@ -885,8 +914,8 @@ class Results:
         w = np.arange(7.0, 13.0, 1.0)
         ax.plot(w, w/w*sSFRcut, 'b:', lw=2.0)
 
-        ax.set_ylabel(r"$\log_{10}\ s\mathrm{SFR}\ (\mathrm{yr^{-1}})$")
         ax.set_xlabel(r"$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$")
+        ax.set_ylabel(r"$\log_{10}\ s\mathrm{SFR}\ (\mathrm{yr^{-1}})$")
 
         # Set the x and y axis minor ticks
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.05))
@@ -907,40 +936,39 @@ class Results:
             
 # ---------------------------------------------------------
 
-    def GasFraction(self, G):
-    
-        print("Plotting the gas fractions")
-    
-        seed(2222)
-    
-        plt.figure()  # New figure
-        ax = plt.subplot(111)  # 1 plot on the figure
-
-        w = np.where((G.Type == 0) & (G.StellarMass + G.ColdGas > 0.0) & 
-          (G.BulgeMass / G.StellarMass > 0.1) & (G.BulgeMass / G.StellarMass < 0.5))[0]
-        if(len(w) > dilute): w = sample(w, dilute)
+    def plot_gas_frac(self):
         
-        mass = np.log10(G.StellarMass[w] * 1.0e10 / self.hubble_h)
-        fraction = G.ColdGas[w] / (G.StellarMass[w] + G.ColdGas[w])
-                    
-        plt.scatter(mass, fraction, marker='o', s=1, c='k', alpha=0.5, label='Model Sb/c galaxies')
-            
-        plt.ylabel(r'$\mathrm{Cold\ Mass\ /\ (Cold+Stellar\ Mass)}$')  # Set the y...
-        plt.xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')  # and the x-axis labels
-            
-        # Set the x and y axis minor ticks
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+        # We save the plots into the output directory of the zeroth model. 
+        zeroth_output_path = (self.models)[0].output_path
+
+        for model in self.models:
+
+            tag = model.tag
+            color = model.color
+            marker = model.marker
+
+            ax.scatter(model.gas_frac_mass, model.gas_frac, marker=marker, s=1, color=color,
+                       alpha=0.5, label=tag + " Sb/c galaxies")
+
+        ax.set_xlabel(r'$\log_{10} M_{\mathrm{stars}}\ (M_{\odot})$')
+        ax.set_ylabel(r'$\mathrm{Cold\ Mass\ /\ (Cold+Stellar\ Mass)}$')
+
         ax.xaxis.set_minor_locator(plt.MultipleLocator(0.05))
         ax.yaxis.set_minor_locator(plt.MultipleLocator(0.25))
+
+        ax.set_xlim([8.0, 12.0])
+        ax.set_ylim([0.0, 1.0])
             
-        plt.axis([8.0, 12.0, 0.0, 1.0])
-            
-        leg = plt.legend(loc='upper right')
+        leg = ax.legend(loc='upper right')
         leg.draw_frame(False)  # Don't want a box frame
         for t in leg.get_texts():  # Reduce the size of the text
             t.set_fontsize('medium')
             
-        outputFile = OutputDir + '6.GasFraction' + OutputFormat
-        plt.savefig(outputFile)  # Save the figure
+        outputFile = "{0}/6.GasFraction{1}".format(zeroth_output_path, OutputFormat) 
+        fig.savefig(outputFile)
         print("Saved file to {0}".format(outputFile))
         plt.close()
             
@@ -1567,11 +1595,12 @@ if __name__ == '__main__':
                    "line_style"  : line_styles,
                    "marker"      : markers}
 
-    plot_toggles = {"SMF"  : 1,
-                    "BMF"  : 1,
-                    "GMF"  : 1,
-                    "BTF"  : 1,
-                    "sSFR" : 1}
+    plot_toggles = {"SMF"      : 1,
+                    "BMF"      : 1,
+                    "GMF"      : 1,
+                    "BTF"      : 1,
+                    "sSFR"     : 1,
+                    "gas_frac" : 1}
 
     results = Results(model_dict, plot_toggles, debug=0)
     results.do_plots()
